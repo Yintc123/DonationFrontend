@@ -1,7 +1,7 @@
 # JKODonation — Frontend
 
 2026 全端面試作業：捐款項目列表（公益團體）。
-本目錄為 **Next.js 15（App Router）+ BFF** 前端應用。
+本目錄為 **Next.js 16（App Router）+ BFF** 前端應用。
 
 > 設計稿：Figma《2026 全端面試作業 - web》
 
@@ -28,7 +28,7 @@ pnpm dev                        # http://localhost:3000
 
 ## Tech Stack
 
-Next.js 15 (App Router) · TypeScript · TailwindCSS · TanStack Query · Zod · Vitest · Playwright · pnpm
+Next.js 16 (App Router, Turbopack default, React Compiler) · React 19.2 · TypeScript · TailwindCSS · TanStack Query · Zod · Vitest · Playwright · pnpm
 
 ## 文件
 

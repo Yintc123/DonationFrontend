@@ -28,7 +28,7 @@
 
 ---
 
-## 2. 資料夾結構（Next.js 15 App Router）
+## 2. 資料夾結構（Next.js 16 App Router）
 
 ```
 frontend/
@@ -141,16 +141,24 @@ GET /api/charities?q=...&cursor=<nextCursor>
 
 | 層級 | 選用 |
 |---|---|
-| 前端框架 | Next.js 15（App Router） |
+| 前端框架 | Next.js 16（App Router、Turbopack 預設、React Compiler 啟用） |
+| React | React 19.2 |
 | 語言 | TypeScript |
 | 樣式 | TailwindCSS |
-| 資料抓取 | TanStack Query（infinite query） |
+| 資料抓取 | TanStack Query（infinite query），搭配 Next.js Cache Components |
 | 驗證 | Zod |
 | 測試 | Vitest（unit）+ Playwright（e2e） |
 | Lint/Format | ESLint + Prettier |
 | 套件管理 | pnpm |
 
 > 詳細決策依據見專案根 `/docs/decisions/`（ADR）。
+
+### Next.js 16 採用的新特性
+
+- **Cache Components**（`use cache` 指令 + PPR）：在 BFF 層用來宣告可快取的 RSC 與資料獲取邊界，前端列表頁可直接用 cache directive 控制
+- **Turbopack（預設）**：`next dev` 啟動約 4 倍快、render 約 50% 快
+- **React Compiler**：自動 memoization，元件不需手動 `useMemo` / `useCallback`
+- **`updateTag()` / `refresh()`**：搜尋結果 invalidate 與 SWR 行為更直覺
 
 ---
 
