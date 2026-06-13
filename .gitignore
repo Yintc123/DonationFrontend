@@ -44,6 +44,7 @@ pnpm-debug.log*
 *.swo
 .idea/
 .vscode/
+.claude/
 
 # TypeScript
 *.tsbuildinfo
