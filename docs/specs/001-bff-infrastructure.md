@@ -280,6 +280,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 const CSRF_EXEMPT_PATHS: ReadonlySet<string> = new Set([
   '/api/csrf',
   '/api/health',
+  '/api/dev/login',                       // §10.4，僅 dev；token chicken-and-egg
   // OAuth callback 由 state 參數防 CSRF；具體 path 由 auth spec 加入
 ])
 
@@ -319,6 +320,10 @@ src/
 │       ├── health/
 │       │   ├── route.ts            # GET /api/health
 │       │   └── route.test.ts
+│       ├── dev/
+│       │   └── login/
+│       │       ├── route.ts        # POST /api/dev/login（§10.4，僅 dev）
+│       │       └── route.test.ts
 │       └── <resource>/             # 個別 endpoint 由業務 spec 定義
 │           ├── route.ts
 │           └── route.test.ts
@@ -384,6 +389,106 @@ src/
 ### 5.1 Next.js Request 型別約定
 
 統一使用 Web 標準 `Request`。需 `cookies()` / `geo` 等 Next.js 特殊欄位時用 `NextRequest`，並在該 handler 註明原因。
+
+### 5.2 `SessionService` 完整 interface
+
+組合 `cookie.ts`（ADR 005 v2）+ `SessionStore`（ADR 006 §5），提供業務語意 API。
+
+```ts
+// src/lib/session/service.ts
+import 'server-only'
+import { cache } from 'react'
+
+export interface CreateSessionInput {
+  user: { id: string; name: string }
+  tokens: TokenPair
+}
+
+export type SessionUpdatePatch = Partial<
+  Pick<StoredSession,
+    | 'accessToken' | 'accessTokenExpiresAt'
+    | 'refreshToken' | 'refreshTokenExpiresAt'
+    | 'user'
+  >
+>
+
+export interface SessionService {
+  /**
+   * 解 cookie → 查 store；命中時觸發 sliding TTL。
+   * **Per-request 去重**：用 `react.cache()` wrap，同一請求多次呼叫共用結果。
+   */
+  get(): Promise<StoredSession | null>
+
+  /**
+   * 建立新 session（首次登入或切換帳號時呼叫）：
+   * 1. 產 sessionId（cookie 層）
+   * 2. 產 csrfToken（43-char base64url）
+   * 3. 寫 Redis store
+   * 4. 寫 cookie
+   * @throws BackendUpstreamError - Redis 寫入失敗
+   */
+  create(input: CreateSessionInput): Promise<{ sessionId: string; csrfToken: string }>
+
+  /**
+   * 更新 session 部分欄位（典型用於 refresh 後寫入新 token pair）：
+   * - 不重產 sessionId、不重產 csrfToken
+   * - 不重設 createdAt
+   * - 重設 lastSeenAt、觸發 sliding TTL
+   * @throws UnauthenticatedError - 無 session 可更新
+   * @throws BackendUpstreamError - Redis 寫入失敗
+   */
+  update(patch: SessionUpdatePatch): Promise<void>
+
+  /** 立即作廢：清 store + 清 cookie。冪等（呼叫時無 session 也 no-op）。 */
+  destroy(): Promise<void>
+
+  /**
+   * 顯式 sliding TTL；`get()` 已自動 touch，本方法給「不取內容只延期」場景。
+   * 無 session → no-op。
+   */
+  touch(): Promise<void>
+
+  /**
+   * 產新 csrfToken 寫回 store（登入狀態轉換時呼叫）。
+   * @returns 新 token
+   * @throws UnauthenticatedError - 無 session
+   */
+  rotateCsrfToken(): Promise<string>
+
+  /**
+   * 觸發 backend refresh 流程（ADR 006 §6 完整邏輯）。
+   * 內部走分散式鎖 + fresh-tokens cache；多並發呼叫只打 backend 一次。
+   * 成功 → 更新 session + 回傳新 StoredSession
+   * @throws UnauthenticatedError - refresh 失敗（backend 401 / replay detected）
+   * @throws BackendUpstreamError - backend 5xx / timeout / Redis 故障
+   */
+  refresh(): Promise<StoredSession>
+}
+
+/**
+ * 取得 SessionService 實例。Store 透過 `getSessionStore()` 取得（依 env 決定 impl）。
+ * 測試可以在 `vi.mock('@/lib/session/store')` 後 mock store。
+ *
+ * 不要在模組 top-level 呼叫；它需要 Request scope（cookie / store handle）。
+ */
+export function getSessionService(): SessionService
+```
+
+#### 實作要點
+
+- `get()` 必須用 `react.cache()` 包裝，避免同一請求路徑（auth check + handler + backendFetch）多次 Redis round-trip
+- `create()` 寫入順序：**先寫 store 再寫 cookie**——萬一 cookie 寫入失敗（極罕見），store 留下的條目會被 TTL 自然清理；反之則會留下無對應 store 的孤兒 cookie
+- `destroy()` 順序：**先清 cookie 再清 store**——若 store 清除失敗使用者已登出 view（cookie 無效），store 條目由 TTL 收尾
+- `refresh()` 不應該被 `create()` / `update()` 內部呼叫（避免遞迴）；它**只**從 `backendFetch` 的過期判斷或 `AUTH_TOKEN_EXPIRED` 401 路徑進入
+
+#### Cache 行為摘要
+
+| Method | per-request 去重 |
+|---|---|
+| `get()` | ✅（react.cache） |
+| `create()` / `update()` / `destroy()` / `touch()` / `rotateCsrfToken()` / `refresh()` | ❌（mutation 不該去重） |
+
+> Mutation 後同一請求內若再 `get()`，會回**舊值**（因 cache）。實作上：所有 mutation 方法執行完應 invalidate cache（react.cache 沒提供 invalidate；解法：mutation 回傳新值，呼叫端不要再 `get()`）。
 
 ---
 
@@ -552,6 +657,149 @@ export async function backendFetch<T = unknown>(
 
 `USE_MOCK=1` 時不打網路，改用 §10 的 mock dispatch。CSRF 仍照常檢查（保持安全模式一致）。
 
+### 8.4 完整流程（pseudocode）
+
+```ts
+// src/lib/api/backend.ts
+import 'server-only'
+
+const PRE_REFRESH_MARGIN_MS = 30_000   // §3.1 safety margin
+
+export async function backendFetch<T>(
+  req: Request,
+  path: string,
+  options: BackendFetchOptions = {},
+): Promise<{ data: T; requestId: string }> {
+  const requestId = newRequestId()
+  const start = Date.now()
+  log.info({ requestId, path, method: options.method ?? 'GET' }, 'bff.upstream.start')
+
+  try {
+    // ── 1. USE_MOCK 短路 ────────────────────────────────────────
+    if (env.USE_MOCK === '1') {
+      const handler = resolveMock(path)
+      if (!handler) throw new BackendUpstreamError(`No mock registered for ${path}`)
+      const data = handler({ query: options.query, body: options.body }) as T
+      log.info({ requestId, durationMs: Date.now() - start }, 'bff.upstream.mock.ok')
+      return { data, requestId }
+    }
+
+    // ── 2. 準備 headers ──────────────────────────────────────
+    const headers: Record<string, string> = {
+      'x-request-id': requestId,
+      'content-type': 'application/json',
+      ...options.headers,
+    }
+
+    // ── 3. 注入 Authorization（非 anonymous）─────────────────
+    let accessToken: string | null = null
+    if (!options.anonymous) {
+      const session = await getSessionService().get()
+      if (!session) throw new UnauthenticatedError('No session')
+
+      // Pre-emptive refresh（§3.1）
+      if (session.accessTokenExpiresAt < Date.now() + PRE_REFRESH_MARGIN_MS) {
+        const refreshed = await getSessionService().refresh()   // 內部走 §3.4 分散式鎖
+        accessToken = refreshed.accessToken
+      } else {
+        accessToken = session.accessToken
+      }
+      headers['authorization'] = `Bearer ${accessToken}`
+    }
+
+    // ── 4. 發 request ────────────────────────────────────────
+    const url = buildUrl(env.BACKEND_API_URL!, path, options.query)
+    const body = options.body != null ? JSON.stringify(options.body) : undefined
+    const signal = AbortSignal.timeout(options.timeoutMs ?? 5000)
+
+    let response: Response
+    try {
+      response = await fetch(url, { method: options.method ?? 'GET', headers, body, signal })
+    } catch (err) {
+      throw classifyNetworkError(err)   // → BackendTimeoutError / BackendUpstreamError
+    }
+
+    // ── 5. Handle backend 401 ───────────────────────────────
+    if (response.status === 401 && !options.anonymous) {
+      const errBody = await safeReadJson(response)
+      const backendCode = errBody?.error?.code
+
+      if (backendCode === 'AUTH_TOKEN_EXPIRED') {
+        // §3.3 EXPIRED → refresh 並重打一次（只重打一次，避免無限循環）
+        const refreshed = await getSessionService().refresh()
+        headers['authorization'] = `Bearer ${refreshed.accessToken}`
+        try {
+          response = await fetch(url, { method: options.method ?? 'GET', headers, body, signal: AbortSignal.timeout(options.timeoutMs ?? 5000) })
+        } catch (err) {
+          throw classifyNetworkError(err)
+        }
+      } else {
+        // §3.3 UNAUTHORIZED / 其他 401 code → 直接 destroy（不 refresh）
+        await getSessionService().destroy().catch(() => {})
+        throw new UnauthenticatedError(backendCode ?? 'UNAUTHORIZED')
+      }
+    }
+
+    // ── 6. 重打後若仍 401 → 視為 refresh 失效 ────────────────
+    if (response.status === 401 && !options.anonymous) {
+      await getSessionService().destroy().catch(() => {})
+      throw new UnauthenticatedError('refresh succeeded but retry still 401')
+    }
+
+    // ── 7. 其他 non-2xx 映射 ─────────────────────────────────
+    if (!response.ok) {
+      if (response.status === 404) throw new NotFoundError(`Backend 404 on ${path}`)
+      if (response.status >= 500) throw new BackendUpstreamError(`Backend ${response.status}`)
+      // 4xx 其他（含 backend 自己的 VALIDATION_ERROR）：當作 upstream 異常
+      throw new BackendUpstreamError(`Unexpected backend status ${response.status}`)
+    }
+
+    // ── 8. 解析 JSON ────────────────────────────────────────
+    let data: T
+    try {
+      data = await response.json() as T
+    } catch {
+      throw new BackendUpstreamError('Backend response not valid JSON')
+    }
+
+    log.info({ requestId, durationMs: Date.now() - start, status: response.status }, 'bff.upstream.ok')
+    return { data, requestId }
+
+  } catch (err) {
+    log.warn({ requestId, durationMs: Date.now() - start, code: errorCodeOf(err) }, 'bff.upstream.error')
+    throw err
+  }
+}
+
+// —— Helpers ————————————————————————————————————————
+
+function classifyNetworkError(err: unknown): BffError {
+  if (err instanceof Error) {
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') return new BackendTimeoutError(err.message)
+    // ECONNREFUSED / DNS / ECONNRESET / fetch network errors
+    if ((err as any).code === 'ECONNREFUSED' || (err as any).code === 'ENOTFOUND') return new BackendUpstreamError(err.message)
+  }
+  return new BackendUpstreamError('Network error')
+}
+
+async function safeReadJson(res: Response): Promise<any> {
+  try { return await res.clone().json() } catch { return null }
+}
+```
+
+### 8.5 流程關鍵不變式
+
+1. **同一請求最多打 backend 兩次**：原打 + 一次 refresh 後重打。第二次仍 401 即放棄
+2. **`AUTH_TOKEN_EXPIRED` 是唯一觸發 refresh 的訊號**：通用 401 / 缺 Authorization / blacklist 命中都不 refresh（§3.3 安全要求）
+3. **Refresh 過 1 次後不再 pre-emptive refresh**：避免極端時序下無限循環
+4. **`anonymous: true` 跳過所有 session 邏輯**：不讀 session、不注入 Authorization、不對 401 reactive refresh
+5. **Mock 模式跳過 session 邏輯**：但**不**跳過 createRoute 的 CSRF 檢查（§9.2 第 6 步）
+
+### 8.6 與 SessionService 的整合（per-request 去重）
+
+- `SessionService.get()` 用 `react.cache()` 包裝（§5.2），即使 `backendFetch` 在 `createRoute` 已 resolve session 後再次呼叫，**也只打一次 Redis**
+- `SessionService.refresh()` 內部用 Redis 分散式鎖（ADR 006 §6），即使並發呼叫**只打一次 backend `/auth/refresh`**
+
 ---
 
 ## 9. Route Handler wrapper（`createRoute`）
@@ -678,6 +926,101 @@ export function resolveMock(path: string): MockHandler | undefined { return regi
 
 `parseBody` 透過 `Content-Length` 與串流計數雙保險，超過 `MAX_BODY_BYTES`（1MB）拋 `PayloadTooLargeError`。
 
+### 10.4 Dev mock session bootstrap
+
+需登入的 endpoint 在 dev 期間沒有 OAuth 流程可走，本節定義「dev 啟動後 5 秒內就能測 auth 路徑」的最小方案。
+
+#### 10.4.1 端點
+
+```
+POST /api/dev/login
+  body 可選：{ user?: { id, name }, ttlHours?: number }
+  回應：{ data: { sessionId, csrfToken, user, expiresAt } }
+```
+
+僅當以下**全部**成立時可用：
+
+| 條件 | 防線 |
+|---|---|
+| `env.NODE_ENV !== 'production'` | 啟動時 route 直接 throw NotFoundError，回 404 |
+| `env.ENABLE_DEV_LOGIN === '1'` | 額外白名單；prod 容器設定 `'0'` 防誤啟 |
+
+兩道防線**並用**，避免「測試環境 NODE_ENV 設成 production」之類誤設定。
+
+#### 10.4.2 行為
+
+```ts
+// src/app/api/dev/login/route.ts
+import 'server-only'
+import { env } from '@/lib/config'
+import { getSessionService } from '@/lib/session/service'
+import { NotFoundError } from '@/lib/errors/NotFoundError'
+import { okResponse, createRoute } from '@/lib/api'
+
+const DEV_USER = { id: 'dev-user-1', name: 'Dev User' }
+
+export const POST = createRoute({
+  cache: 'no-store',
+  handler: async () => {
+    if (env.NODE_ENV === 'production' || env.ENABLE_DEV_LOGIN !== '1') {
+      throw new NotFoundError('dev login disabled')
+    }
+    const now = Date.now()
+    const accessTtlMs = 3 * 60 * 60 * 1000      // 3h，對齊 ADR 004
+    const refreshTtlMs = 30 * 24 * 60 * 60 * 1000 // 30d
+
+    const result = await getSessionService().create({
+      user: DEV_USER,
+      tokens: {
+        accessToken: 'dev-fake-access-token',
+        accessTokenExpiresAt: now + accessTtlMs,
+        refreshToken: 'dev-fake-refresh-token',
+        refreshTokenExpiresAt: now + refreshTtlMs,
+      },
+    })
+    return okResponse({ ...result, user: DEV_USER, expiresAt: now + accessTtlMs })
+  },
+})
+```
+
+#### 10.4.3 與 USE_MOCK 的搭配
+
+| 組合 | 結果 | 用途 |
+|---|---|---|
+| `USE_MOCK=1` + dev login | 完全本機跑；backend 不必啟動，fake token 不會被驗證 | **dev 預設模式** |
+| `USE_MOCK=0` + dev login | session 已建但 fake token 打真 backend 會 401 | 不建議；應走真實 OAuth flow |
+| `USE_MOCK=0` + 真實登入 flow | 正式流程；本 spec 範圍外（auth-login.md）| 整合測試 / production |
+
+#### 10.4.4 CSRF 與 Origin
+
+`/api/dev/login` 為 POST，理論上需 CSRF；但：
+- 第一次呼叫時 client 還沒 session、沒 csrfToken（chicken-and-egg）
+- 將此 path 加入 §4.6 `CSRF_EXEMPT_PATHS`（與 `/api/csrf` 同處理）
+- Origin 檢查**仍照常**（屬白名單，dev 必含 `http://localhost:3000`）
+
+#### 10.4.5 環境變數
+
+加入 §13 變數清單：
+
+| 變數 | 範圍 | 必填 | 預設 | 用途 |
+|---|---|---|---|---|
+| `ENABLE_DEV_LOGIN` | server | — | `'0'` | `'1'` 啟用 `/api/dev/login`；production 自動鎖死 |
+
+`src/lib/config.ts` superRefine 加：
+
+```ts
+if (env.NODE_ENV === 'production' && env.ENABLE_DEV_LOGIN === '1') {
+  ctx.addIssue({ code: 'custom', path: ['ENABLE_DEV_LOGIN'], message: 'must not be enabled in production' })
+}
+```
+
+#### 10.4.6 測試
+
+- `NODE_ENV=production` + `ENABLE_DEV_LOGIN=1` → env 驗證失敗（啟動拒絕）
+- `NODE_ENV=production` + `ENABLE_DEV_LOGIN=0` → 路由回 404
+- `NODE_ENV=development` + `ENABLE_DEV_LOGIN=1` → 200，session 建立成功
+- 後續對需 auth 的 endpoint 請求帶 cookie → 通過 auth 檢查
+
 ---
 
 ## 11. 驗證邊界（Zod）
@@ -758,6 +1101,7 @@ const RawEnv = z.object({
 
   APP_VERSION: z.string().default('0.0.0'),       // 給 /api/health 用
   APP_COMMIT: z.string().optional(),              // 給 /api/health 用
+  ENABLE_DEV_LOGIN: z.enum(['0', '1']).default('0'),  // 給 /api/dev/login 用，§10.4
   NEXT_PUBLIC_APP_NAME: z.string().default('JKODonation'),
 }).superRefine((env, ctx) => {
   // USE_MOCK=0 時：BACKEND_API_URL、SESSION_SECRET、REDIS_URL 必填
@@ -772,6 +1116,10 @@ const RawEnv = z.object({
     if (list.length === 0 || list.every(o => o.startsWith('http://localhost'))) {
       ctx.addIssue({ code: 'custom', path: ['ALLOWED_ORIGINS'], message: 'production requires non-localhost origins' })
     }
+  }
+  // production 不允許 dev login（§10.4 第二道防線）
+  if (env.NODE_ENV === 'production' && env.ENABLE_DEV_LOGIN === '1') {
+    ctx.addIssue({ code: 'custom', path: ['ENABLE_DEV_LOGIN'], message: 'must not be enabled in production' })
   }
 })
 
@@ -801,6 +1149,7 @@ export const allowedOrigins = new Set(
 | `REDIS_COMMAND_TIMEOUT_MS` | server | — | `1000` | 單一 command timeout |
 | `APP_VERSION` | server | — | `0.0.0` | `/api/health` 回傳用 |
 | `APP_COMMIT` | server | — | — | `/api/health` 回傳用 |
+| `ENABLE_DEV_LOGIN` | server | — | `'0'` | `'1'` 啟用 `/api/dev/login`；production 啟動拒絕 |
 | `NEXT_PUBLIC_APP_NAME` | client + server | — | `JKODonation` | UI 顯示用 |
 
 `.env.example` 同步更新。
@@ -999,6 +1348,7 @@ CI 不設硬性 fail 門檻（短工期），但 PR 報告覆蓋率變化。
 - [ ] `src/lib/mock/dispatch.ts`：register / resolve / 未註冊三類測試
 - [ ] `src/lib/log.ts`：JSON 格式 + 敏感欄位遮罩（含 `Authorization` 前 8 字元、`X-CSRF-Token` 只記長度、`sessionId` 前 4 字）測試
 - [ ] `src/app/api/csrf/route.ts`、`src/app/api/health/route.ts` 通過 §15.6 案例（health 含 Redis ping）
+- [ ] `src/app/api/dev/login/route.ts` 通過 §10.4.6 案例（production 啟動拒絕 / 404 / dev 200）
 - [ ] `frontend/docker-compose.yml` 提供本地 Redis（ADR 006 §9）
 - [ ] `.env.example` 同步包含本 spec §13.2 所有變數（含 `REDIS_*`）
 - [ ] **無業務字眼自檢**：`grep -rE "charity|donation|jko[^_-]" src/lib/{api,session,security,errors,config,mock,log,schemas/{envelope,pagination}}` 應無命中（`jko-` / `jko_` 等基建前綴允許）
