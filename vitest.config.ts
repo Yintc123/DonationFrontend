@@ -15,15 +15,19 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     css: true,
+    // Vitest's test.env merges OVER process.env (i.e. test.env wins on
+    // collision). Use fallback pattern so CI's REDIS_URL (port 6379) takes
+    // precedence over the local docker-compose default (6380) when set.
     env: {
       NODE_ENV: 'test',
       USE_MOCK: '1',
-      SESSION_SECRET: 'test-session-secret-must-be-32-chars-long',
+      SESSION_SECRET:
+        process.env.SESSION_SECRET ?? 'test-session-secret-must-be-32-chars-long',
       SESSION_COOKIE_NAME: 'jko_session',
       SESSION_TTL_SECONDS: '2592000',
       ALLOWED_ORIGINS: 'http://localhost:3000',
-      REDIS_URL: 'redis://localhost:6380/0',
-      REDIS_KEY_PREFIX: 'jko-bff-test',
+      REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6380/0',
+      REDIS_KEY_PREFIX: process.env.REDIS_KEY_PREFIX ?? 'jko-bff-test',
       APP_VERSION: '0.0.0-test',
       ENABLE_DEV_LOGIN: '1',
       NEXT_PUBLIC_APP_NAME: 'JKODonation',

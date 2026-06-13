@@ -127,11 +127,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          # Browser set is part of the key — adding webkit must invalidate the
+          # cache that previously only held chromium.
+          key: playwright-chromium-webkit-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
+        # playwright.config.ts has two projects: chromium + mobile-iphone-x
+        # (iPhone X device uses WebKit). Install both engines.
+        run: pnpm exec playwright install --with-deps chromium webkit
 
       - name: Run Playwright tests
         run: pnpm test:e2e
