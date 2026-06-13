@@ -1,8 +1,8 @@
 # Spec 003：捐款項目列表 — UI（Overview / Index）
 
-- **狀態**：Draft（v0.4 — 補 CategoryMenu 功能 + FilterButton 啟用）
-- **建立日期**：2026-06-13（v0.1）/ 2026-06-14（v0.2 / v0.3 / v0.4）
-- **拆分結構**：1 overview + 1 design system + 10 元件 + 2 features
+- **狀態**：Draft（v0.5 — 文案校對 + 對齊截圖補件後的子 spec 修正）
+- **建立日期**：2026-06-13（v0.1）/ 2026-06-14（v0.2 / v0.3 / v0.4 / v0.5）
+- **拆分結構**：1 overview + 1 design system + 11 元件（含 003e1/e2/e3）+ 2 features
 - **依賴**：
   - [Spec 002 捐款項目列表 — 業務 / 資料層](./002-list-data.md)（型別 / hooks / 狀態 shape / 三 tab generic factory）
   - Figma file `0kx2Ne2rvndhfVr3uVUwad`：frames `1:2226`、`1:2247`、`1:2213`（**僅 charity tab**；donation / item tab 沿用同 layout，見 [brief §2](../brief.md#2-設計畫面盤點)）
@@ -14,7 +14,7 @@
 
 ## 1. 目的
 
-定義 `/charities` 頁面的 UI 層：頁面組合、9 個元件 anatomy、設計 token、RWD、e2e。**不**處理任何 schema / fetch / hook 邏輯（屬 [spec 002](./002-list-data.md)）。
+定義 `/charities` 頁面的 UI 層：頁面組合、13 個元件 anatomy（design system + 11 UI + 2 features）、設計 token、RWD、e2e。**不**處理任何 schema / fetch / hook 邏輯（屬 [spec 002](./002-list-data.md)）。
 
 ---
 
@@ -37,7 +37,7 @@
 | [003j ResourceInfiniteList](./003j-charity-list.md) | feature：useResourceListInfinite 消費 + sentinel + 狀態切換 + `active` lazy 控制 | 中（v0.2 抽 generic） |
 | [003k FilterButton](./003k-filter-button.md) | 灰底 pill「全部 ▼」filter trigger；點擊展開 CategoryMenu | 中 |
 | [003l BrandFooter](./003l-brand-footer.md) | 底部品牌標語「── 愛心沒有底線 ──」 | **高** |
-| [003m CategoryMenu](./003m-category-menu.md) | FilterButton 展開的分類選單（全部 + 6 categories）；click-outside / Esc 關閉 | 中 |
+| [003m CategoryMenu](./003m-category-menu.md) | FilterButton 展開的 **bottom-sheet modal**（全部 + 16 categories，共 17 個 option）；backdrop click / Esc / X 關閉 | 中 |
 
 ### 2.1 推薦實作順序
 
@@ -47,16 +47,18 @@
    ├── 003c SearchBar
    ├── 003d TabsRow
    ├── 003e1 CharityCard / 003e2 DonationProjectCard / 003e3 SaleItemCard
-   ├── 003f LoadingSkeleton
+   ├── 003f LoadingSkeleton            ← 依賴 003e1/e2/e3 shape mirror
    ├── 003g EmptyState
    ├── 003h InlineError
    ├── 003k FilterButton
    ├── 003l BrandFooter
-   └── 003m CategoryMenu
-            └── 003j ResourceInfiniteList (feature)
-                     └── 003i CharityListShell (feature)
+   └── 003m CategoryMenu (bottom-sheet)
+            └── 003j ResourceInfiniteList (feature)  ← 依賴 003e1/e2/e3 + f + g + h
+                     └── 003i CharityListShell (feature)  ← 依賴 003b/c/d/j/k/l/m
                               └── 003 (本檔 §3 頁面組合)
 ```
+
+> 修正 v0.4 順序樹圖：003m 由 003i Shell 渲染（非 003j），所以正確依賴鏈是 003m → 003i，不再掛在 003j 下。
 
 ### 2.2 複用性說明
 
@@ -160,7 +162,7 @@ export default async function Page({
 | 輸入新 q（debounce 中） | 舊資料保持顯示，300ms 內看不到變化 |
 | 輸入新 q（debounce 觸發後） | active tab 列表替換為新結果；其他 tab 30s 內 cache stay；queryKey 變動跨 tab 都套用 |
 | 切換 tab | 立即顯示新 tab；首次切換打網路（pending → skeleton），切回 30s 內 cache hit |
-| 點 FilterButton | 展開 CategoryMenu（dropdown 下方）；caret 旋轉 |
+| 點 FilterButton | 展開 CategoryMenu（**bottom-sheet modal**，由頁底滑上）；caret 旋轉 180° |
 | 點 category 選項 | menu 立即關閉；FilterButton label 更新；URL `?category=` 更新；active tab 列表 refetch；其他 tab 同 category 用 cache（30s 內） |
 | 點「全部」option | 同上但 URL drop `?category=`、label 變「全部」 |
 | 點 menu 外區域 / Esc | menu 關閉，不改 category |
@@ -179,20 +181,20 @@ export default async function Page({
 | # | 案例 | 期望 |
 |---|---|---|
 | 1 | 載入 `/` | 跳 `/charities`；第一屏看到至少 5 張 charity row card（含 logo 縮圖 + 名稱 + 描述） |
-| 2 | 輸入「流浪動物」 | 等 ~400ms 後 URL 變 `?q=流浪動物`、卡片只剩相關 |
+| 2 | 輸入「動物保護」 | 等 ~400ms 後 URL 變 `?q=動物保護`、卡片只剩相關 |
 | 3 | 輸入「zxq」 | 顯示「查無相關資料」illustration + 副標 |
 | 4 | 按「取消」 | URL 回乾淨 `/charities`、卡片回完整列表 |
 | 5 | 捲動到距底 ≤10% | 第二頁 10 張卡片接在後面（fixture 至少 25 筆） |
-| 6 | 重新整理 `?q=流浪動物` | 仍顯示過濾後的卡片（refresh 保留搜尋） |
+| 6 | 重新整理 `?q=動物保護` | 仍顯示過濾後的卡片（refresh 保留搜尋） |
 | 7 | 點擊「捐款專案」tab | URL 變 `?tab=donation`；顯示 donation 列表；charity 那組 hook 不再打網路（spy network） |
 | 8 | 切回「公益團體」tab（30s 內） | 不打網路（cache hit）；列表狀態保留（scroll position 不變） |
 | 9 | `?tab=item` refresh | 直接進入義賣商品 tab，預載完成 |
-| 10 | 點 FilterButton | CategoryMenu 展開、6 個 categories + 「全部」可見 |
-| 11 | 在 menu 選「流浪動物」 | URL `?category=animal`；列表全部 `category === 'animal'` |
-| 12 | 點 menu 外區域 | menu 關閉、category 不變 |
-| 13 | `?category=animal` refresh | 直接顯示已篩選列表 |
-| 14 | 切到「捐款專案」tab | 看到 donation card（cover image 在上、主辦團體名、tags）— 與 charity row card 視覺不同 |
-| 15 | 切到「義賣商品」tab | 看到 item card（商品圖、`公益義賣` ribbon、紅色 TWD 價格） |
+| 10 | 點 FilterButton | CategoryMenu **bottom-sheet** 由底部滑上、17 個 option 可見（全部 + 16 categories） |
+| 11 | 在 menu 選「動物保護」 | URL `?category=animal_protection`；列表全部 `category === 'animal_protection'` |
+| 12 | 點 backdrop（menu 外區域） | menu 關閉、category 不變 |
+| 13 | `?category=animal_protection` refresh | 直接顯示已篩選列表 |
+| 14 | 切到「捐款專案」tab | 看到 donation card（cover image 在上、主辦團體名疊在圖片底部紅色 overlay、tags）— 與 charity row card 視覺不同 |
+| 15 | 切到「義賣商品」tab | 看到 **2 欄 grid** 排版的 item card（商品圖、左上「公益標籤」ribbon、紅色 TWD 價格） |
 | 16 | 視覺：375 / 480 / 1280 viewport | 三種 card 各自不變形、收斂在 `max-w-[480px]` |
 
 > e2e 走 `USE_MOCK=1` + [spec 002 §4 mock fixtures](./002-list-data.md#4-mock-fixture--srclibmock)（三組 fixture），不打真 backend。
@@ -305,3 +307,4 @@ export default async function Page({
 | 0.4 | 2026-06-14 | 補 user 口述功能：[003m CategoryMenu](./003m-category-menu.md)（dropdown 列 6 個 categories）+ FilterButton 啟用點擊 + Shell 加 selectedCategory/isMenuOpen state + 三 list 收 category prop |
 | 0.5 | 2026-06-14 | 截圖補件 (IMG_4875/4877/4879/4880/4881) 配套：(a) 003e 拆 003e1/e2/e3（三 tab 卡片 layout 顯著不同）；(b) 003m 改 bottom-sheet modal（17 options）；(c) 003f Skeleton 加 `variant` 對應三種 shape；(d) 003i Shell 拿掉 dropdown anchor，CategoryMenu 渲染上提；(e) 003j `<ResourceCard>` → `<CardForResource>` switch dispatch；(f) overview composition 樹、page.tsx prefetch、acceptance、e2e 同步 |
 | 0.5 | 2026-06-14 | 截圖補件 IMG_4875-4883：(1) §2 003e 拆 003e1/e2/e3 三種卡片 layout；(2) §8.1 categories filter 改 bottom-sheet modal（003m v0.4）；(3) §8.2 詳情頁從 out-of-scope 移入範圍內 → 新增 [004 系列](./004-detail-pages.md) |
+| 0.6 | 2026-06-14 | 全面對齊 ground truth（IMG_4875-4883 + Figma file）：(a) §1「9 元件」→「13 元件」；(b) §2 003m 描述「6 categories dropdown」→「17 options bottom-sheet」；(c) §2.1 順序樹：003m 由 003j 下移到 003i 下（dependency 修正）；(d) §4 點 FilterButton 描述「dropdown」→「bottom-sheet」；(e) §5 e2e case 10-13 category key `'animal'` → `'animal_protection'`、label「動物保護」→「動物保護」；(f) e2e case 15 item ribbon 「公益義賣」→「公益標籤」；(g) e2e case 14 donation 主辦團體名 banner 描述為「圖片底部紅色 overlay」 |

@@ -1,6 +1,6 @@
 # Spec 003k：FilterButton
 
-- **狀態**：Draft（v0.3 — 補 onClick 與 CategoryMenu 串接）
+- **狀態**：Draft（v0.4 — `aria-haspopup` 改 `"dialog"` 對齊 003m bottom-sheet pattern）
 - **路徑**：`src/components/ui/FilterButton.tsx`
 - **依賴**：[003a Design System](./003a-design-system.md)、[003m CategoryMenu](./003m-category-menu.md)（由父層配對）
 - **Figma 對應**：`_Filter Item`（componentId `1:1022`），在 frame `1:2339` 的 row 第一個元素
@@ -10,7 +10,7 @@
 
 ## 1. 職責
 
-頁面 chrome 中的「分類 / 篩選」觸發按鈕。預設顯示「全部 ▼」；選了分類後顯示對應中文 label（如「流浪動物 ▼」）。點擊觸發父層展開 [CategoryMenu](./003m-category-menu.md)。
+頁面 chrome 中的「分類 / 篩選」觸發按鈕。預設顯示「全部 ▼」；選了分類後顯示對應中文 label（如「動物保護 ▼」）。點擊觸發父層展開 [CategoryMenu](./003m-category-menu.md)。
 
 > v0.2 預設 `disabled=true`（dropdown 內容缺）。**v0.3 啟用**（user 補功能：點擊展開分類選單）。
 
@@ -20,7 +20,7 @@
 
 ```ts
 type FilterButtonProps = {
-  /** 當前顯示的 label。「全部」或某分類中文名（如「流浪動物」）。 */
+  /** 當前顯示的 label。「全部」或某分類中文名（如「動物保護」）。 */
   label: string
   onClick: () => void
   /** Menu 是否展開；用於 aria-expanded 與 caret 旋轉動效。 */
@@ -75,7 +75,7 @@ export function FilterButton({ label, onClick, isOpen = false }: FilterButtonPro
     <button
       type="button"
       onClick={onClick}
-      aria-haspopup="menu"
+      aria-haspopup="dialog"
       aria-expanded={isOpen}
       aria-label={`篩選：${label}`}
       className="inline-flex items-center bg-black/5 rounded-md px-3 py-1.5
@@ -112,7 +112,7 @@ export function FilterButton({ label, onClick, isOpen = false }: FilterButtonPro
 | 條件 | 視覺 |
 |---|---|
 | `label='全部'` + `isOpen=false` | 「全部 ▼」 |
-| `label='流浪動物'` + `isOpen=true` | 「流浪動物 ▲」(caret 翻轉) |
+| `label='動物保護'` + `isOpen=true` | 「動物保護 ▲」(caret 翻轉) |
 
 ---
 
@@ -128,7 +128,7 @@ export function FilterButton({ label, onClick, isOpen = false }: FilterButtonPro
 - caret icon 存在且 `aria-hidden`
 - 點擊觸 onClick
 - `aria-label="篩選：全部"`
-- `aria-haspopup="menu"`
+- `aria-haspopup="dialog"`（v0.4：對齊 [003m](./003m-category-menu.md) `role="dialog"`）
 - `aria-expanded=false` / `true` 反映 isOpen
 - isOpen=true 時 caret 有 `rotate-180` class
 
@@ -137,7 +137,7 @@ export function FilterButton({ label, onClick, isOpen = false }: FilterButtonPro
 ## 8. a11y
 
 - `<button type="button">` semantic
-- `aria-haspopup="menu"` 告知 SR 點擊會展開選單
+- `aria-haspopup="dialog"` 告知 SR 點擊會打開 dialog（對齊 [003m CategoryMenu](./003m-category-menu.md) `role="dialog"`；v0.4 修正自 v0.3 的 `"menu"`）
 - `aria-expanded` 反映展開狀態
 - `aria-label` 表達「這是篩選按鈕」+ 當前選項
 - caret icon `aria-hidden`（裝飾）
@@ -158,3 +158,4 @@ export function FilterButton({ label, onClick, isOpen = false }: FilterButtonPro
 |---|---|---|
 | 0.2 | 2026-06-14 | 初版（Figma 對齊；`disabled=true` 預設，dropdown 內容缺） |
 | 0.3 | 2026-06-14 | user 補功能：拿掉 disabled、加 isOpen 反映展開、加 onClick 串接 [003m CategoryMenu](./003m-category-menu.md)、caret 旋轉動效 |
+| 0.4 | 2026-06-14 | `aria-haspopup` 從 `"menu"` 改為 `"dialog"` 對齊 003m v0.4 bottom-sheet modal `role="dialog"`（ARIA pattern 配對修正） |

@@ -1,6 +1,6 @@
 # Spec 003j：ResourceInfiniteList（feature）
 
-- **狀態**：Draft（v0.3 — 加 `category` prop 透傳到 hook）
+- **狀態**：Draft（v0.5 — `CardForResource` 收斂為本檔唯一 source；003e 索引只指向本檔）
 - **路徑**：`src/components/features/ResourceInfiniteList.tsx`
 - **依賴**：
   - [003a Design System](./003a-design-system.md)
@@ -146,8 +146,10 @@ export function ResourceInfiniteList({
   )
 }
 
-// —— Card dispatch ——
-// 從 003e §3 抽出；放本檔以集中分派邏輯（避免 003e index 又被 import）
+// —— Card dispatch（單一 source of truth） ——
+// v0.5：本元件為 dispatch 唯一定義位置；003e 索引僅文字說明，不再給 code（避免雙 source 漂移）
+import type { Charity, Donation, Item } from '@/lib/schemas/list'
+
 function CardForResource({
   resource,
   item,
@@ -235,8 +237,8 @@ useScrollPercentSentinel({
 | 9 | hasNextPage=false | sentinel hook 收到 `enabled: false` |
 | 10 | sentinel 觸 trigger | fetchNextPage 被呼叫 |
 | 11 | resource='donation' | `useResourceListInfinite` 收到 resource='donation' |
-| 12 | category='animal' | `useResourceListInfinite` 收到 category='animal'，queryKey 變動 |
-| 13 | category 從 'animal' 改成 null | hook 重新 fetch（queryKey 不同） |
+| 12 | category='animal_protection' | `useResourceListInfinite` 收到 category='animal_protection'，queryKey 變動 |
+| 13 | category 從 'animal_protection' 改成 null | hook 重新 fetch（queryKey 不同） |
 
 ---
 
@@ -269,3 +271,4 @@ useScrollPercentSentinel({
 | 0.2 | 2026-06-14 | 抽 generic `ResourceInfiniteList`：`resource` prop + `active` lazy 控制 + 改 scroll-percent sentinel + EmptyState 文案 per resource |
 | 0.3 | 2026-06-14 | 加 `category: CategoryKey \| null` prop 透傳給 `useResourceListInfinite`；不變 anatomy / 不變狀態切換邏輯 |
 | 0.4 | 2026-06-14 | 配合 003e 拆三 component：`<ResourceCard>` → `<CardForResource resource item />` switch dispatch；imports / tests 都改 |
+| 0.5 | 2026-06-14 | `CardForResource` 收斂為本檔唯一 source（003e 索引同步移除重複定義）；test case 12/13 的 category key 從 `'animal'` 校正為 `'animal_protection'`（對齊 002 v0.4） |

@@ -1,10 +1,10 @@
 # Spec 003a：UI 設計系統 — Tokens / Assets / RWD
 
-- **狀態**：Draft
-- **建立日期**：2026-06-13
+- **狀態**：Draft（v0.3 — 對齊截圖補件 IMG_4875~4883 補 token）
+- **建立日期**：2026-06-13（v0.1）/ 2026-06-14（v0.2 補 brand.soft + alert）/ 2026-06-14（v0.3 補 line / select / overlay token）
 - **影響範圍**：`tailwind.config.ts`、`src/app/globals.css`、`public/figma/*`
-- **依賴**：Figma file `0kx2Ne2rvndhfVr3uVUwad`（顏色 / 字級 source of truth）
-- **下游**：所有 003b–003j 元件 spec
+- **依賴**：Figma file `0kx2Ne2rvndhfVr3uVUwad`（顏色 / 字級 source of truth）+ `docs/images/IMG_4875~4883`
+- **下游**：所有 003b–003m 元件 spec
 
 ---
 
@@ -21,31 +21,36 @@
 ```ts
 colors: {
   brand: {
-    DEFAULT: '#C9191D', // TopNav / status bar bg（Figma theme/bg-primary）
+    DEFAULT: '#C9191D', // TopNav / status bar bg / 主 CTA 紅按鈕 / 義賣 ribbon / 價格（Figma theme/bg-primary，對齊 IMG_4881~4883 大紅按鈕）
     400:     '#D63F3C', // active tab underline（Figma palette/brand/400）
-    soft:    '#FDECEC', // 003e2 DonationProjectCard 主辦團體名 banner 淺色底（v0.2 補件）
-  },
-  alert: {
-    DEFAULT: '#EF4444', // 003e3 SaleItemCard 「公益義賣」ribbon + TWD 價格（對齊 Tailwind red-500，v0.2 補件）
+    overlay: 'rgba(201,25,29,0.78)', // 003e2 DonationProjectCard 圖片底部「主辦團體名」紅色半透明 overlay（v0.3 補件，對齊 IMG_4875 圖片下緣）
   },
   ink: {
     AAA:  'rgba(0,0,0,0.9)', // primary text（card title、tab active label）
     AA:   'rgba(0,0,0,0.7)', // secondary text（card description）
     A:    'rgba(0,0,0,0.5)', // muted text（empty subtitle、magnifier icon fill）
-    link: '#2E7DD9',         // 「取消」button（Figma theme/text-link）
+    link: '#2E7DD9',         // 「取消」button、聯絡資訊連結（Figma theme/text-link）
   },
   surface: {
     page: '#F4F4F6',         // page bg（Figma theme/bg-AA）
-    card: '#FFFFFF',         // card bg（Figma theme/bg-AAA）
+    card: '#FFFFFF',         // card bg、modal sheet bg（Figma theme/bg-AAA）
+  },
+  line: {
+    DEFAULT: 'rgba(0,0,0,0.10)', // 卡片 border、modal divider、category chip border
+    soft:    'rgba(0,0,0,0.06)', // 細分隔線（003m header bottom）
   },
 }
 ```
 
-> 不引 Figma 的 `palette/black/5` / `palette/black/10` / `palette/black/20` — 直接用 Tailwind 原生的 `black/[opacity]`（`bg-black/5`、`border-black/10`、`text-black/20`、`bg-black/20`）。
+> **使用規則（v0.3 新增）**：
+> 1. **禁止直接寫 hex**（如 `#EF4444`、`bg-red-500`）。
+> 2. **允許**直接用 Tailwind 原生 `black/[opacity]` 語法（`bg-black/5`、`border-black/10`、`text-black/20`、`bg-black/40`）— 用於通用透明黑（hover bg、divider、backdrop）。
+> 3. 「紅色」與「sale 紅」**統一**用 `brand.DEFAULT`（CTA 按鈕、義賣 ribbon、TWD 價格、CategoryMenu 選中態紅框紅字）—— 因 Figma 整套設計只用一種紅，不需 alert 系列。v0.2 暫設的 `alert.DEFAULT (#EF4444)` 於 v0.3 **撤回**。
+> 4. 中性 border / divider 用 `border-line` token（線粗 `1px`）。
 
 > Figma 的 `palette/gray/100`（`#EDEDF1`）視覺等價於 `black/5`（色差 < 2/255）；統一用 `bg-black/5` 避免多開 token，[003c SearchBar](./003c-searchbar.md) 與 [003k FilterButton](./003k-filter-button.md) 都這樣用。
 
-> `brand.soft` / `alert.DEFAULT` 是 v0.2 補件（003e2 / 003e3）需要的色 — IMG_4880 banner / IMG_4877 ribbon 的確切色號未由 Figma 規定，先用合理 placeholder：`brand.soft` 是 brand red 的 90% 白混合、`alert.DEFAULT` 直接對齊 Tailwind `red-500`（業界常用 alert / sale 顏色）。後續若 Figma 確認再換。
+> **v0.3 取消** `brand.soft`：截圖揭露 [003e2 DonationProjectCard](./003e2-donation-project-card.md) 的主辦團體名其實是**疊在圖片底部的紅色半透明 overlay**（白字），不是另起一條淺色 banner — 改用 `brand.overlay` token。
 
 ---
 
@@ -144,3 +149,14 @@ html, body {
 - **PNG 壓縮**：empty-no-data.png 可壓 1536→288 省 ~80% 容量
 - **Dark mode**：Figma 無設計；本 spec 不提供
 - **Tailwind v3 vs v4**：實作前確認專案 stable 版本，調整 token 宣告位置
+- **`brand.overlay` 透明度確切值**：v0.3 用 `rgba(201,25,29,0.78)` 觀感對齊 IMG_4875；Figma 未明示，可在實作時微調 0.7~0.85 之間
+
+---
+
+## 9. 變更紀錄
+
+| 版本 | 日期 | 變更 |
+|---|---|---|
+| 0.1 | 2026-06-13 | 初版（brand / ink / surface token、字級 mapping、3 assets） |
+| 0.2 | 2026-06-14 | 補 `brand.soft` / `alert.DEFAULT` 供 003e2 banner / 003e3 ribbon / 價格使用 |
+| 0.3 | 2026-06-14 | 截圖補件後修正：(a) 撤回 `brand.soft`（DonationProjectCard 是圖片底部紅色 overlay，非淺色 banner）；(b) 撤回 `alert.DEFAULT`（Figma 只用一種紅，ribbon / 價格 / CTA / 選中態統一 `brand.DEFAULT`）；(c) 新增 `brand.overlay`（圖片底部半透明紅）+ `line.DEFAULT` / `line.soft`（卡片 border、modal divider）；(d) 明確「禁 hex / 允許 black-opacity / 紅色統一 brand」三條規則 |

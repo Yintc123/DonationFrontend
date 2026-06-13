@@ -1,6 +1,6 @@
 # Spec 003i：CharityListShell（feature）
 
-- **狀態**：Draft（v0.3 — 加 category state + CategoryMenu 串接）
+- **狀態**：Draft（v0.5 — 校正 category key 為 002 v0.4 `animal_protection`、與下游 spec 文案同步）
 - **路徑**：`src/components/features/CharityListShell.tsx`
 - **依賴**：
   - [003a Design System](./003a-design-system.md)
@@ -209,13 +209,13 @@ useUrlSync 把 ?tab=donation 寫入 URL
 ```
 FilterButton onClick → setMenuOpen(true) → <CategoryMenu> 渲染
   ↓
-user 點「流浪動物」option
+user 點「動物保護」option
   ↓
-CategoryMenu onSelect('animal') → setSelectedCategory('animal') → onClose() → setMenuOpen(false)
+CategoryMenu onSelect('animal_protection') → setSelectedCategory('animal_protection') → onClose() → setMenuOpen(false)
   ↓
-useUrlSync 把 ?category=animal 寫入 URL
+useUrlSync 把 ?category=animal_protection 寫入 URL
   ↓
-FilterButton label 更新為「流浪動物 ▼」
+FilterButton label 更新為「動物保護 ▼」
   ↓
 三 list queryKey 含 category 都變動；但只 active 那個 enabled=true → 重新 fetch
   其他兩 tab 換 category 的 cache（30s 內切過去命中）
@@ -235,7 +235,7 @@ FilterButton label 更新為「流浪動物 ▼」
 
 > Test 屬 integration 性質 — 渲染整個 shell，mock `useResourceListInfinite`、`useUrlSync`、`useRouter`。
 
-- 初始：`initialQ="foo" initialTab="donation" initialCategory="animal"` → SearchBar 顯示 "foo"、TabsRow active="donation"、FilterButton label="流浪動物"
+- 初始：`initialQ="foo" initialTab="donation" initialCategory="animal_protection"` → SearchBar 顯示 "foo"、TabsRow active="donation"、FilterButton label="動物保護"
 - 打字「bar」→ draft 變 "foobar"；300ms 後 list q 收到 "foobar"
 - 連續打 10 字 → debouncedQ 只更新 1 次（spy call count）
 - 按取消 → 300ms 後 list q 收到 ""；URL params 不含 `q`
@@ -276,3 +276,4 @@ FilterButton label 更新為「流浪動物 ▼」
 | 0.2 | 2026-06-14 | 三 tab + `activeTab` state + `useUrlSync` + 三 list 同 mount active prop |
 | 0.3 | 2026-06-14 | 加 `selectedCategory` + `isMenuOpen` state + 串 [003k FilterButton](./003k-filter-button.md) / [003m CategoryMenu](./003m-category-menu.md)；三 list 收 `category` prop；`initialCategory` 由 RSC 預載 |
 | 0.4 | 2026-06-14 | 配合 003m v0.4 改 bottom-sheet：拿掉 FilterButton wrapper 的 `relative`、CategoryMenu 渲染上提到頁面層級（不再嵌在 row 內） |
+| 0.5 | 2026-06-14 | 文案校正：所有 category key 範例從 `'animal'` 改為 [002 v0.4](./002-list-data.md) 的 `'animal_protection'`，label 範例「流浪動物」改「動物保護」對齊 002 §3.1 `CATEGORY_LABELS` |

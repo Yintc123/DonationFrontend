@@ -1,12 +1,12 @@
 # Spec 003m：CategoryMenu（bottom-sheet modal）
 
-- **狀態**：Draft（v0.4 — 截圖補件後從 dropdown 改 bottom-sheet modal；categories 6 → 17）
+- **狀態**：Draft（v0.5 — 對齊 003a v0.3 token 收斂、與 003k ARIA pair；視覺對齊 IMG_4877 / 4879 / 4880）
 - **路徑**：`src/components/ui/CategoryMenu.tsx`
 - **依賴**：
   - [003a Design System](./003a-design-system.md)
   - [003k FilterButton](./003k-filter-button.md)（trigger）
   - [002 §3.1 CategoryKey + CATEGORY_LABELS](./002-list-data.md#3-schemas--srclibschemaslistts)（16 個 categories 來源）
-- **Figma 對應**：IMG_4879、IMG_4881（**bottom-sheet modal**）
+- **Figma 對應**：IMG_4877 / IMG_4879 / IMG_4880（**bottom-sheet modal**，三個 tab 開啟形態）
 - **複用性**：中 — 結構為「全屏 modal + grid of options + 選中態」，泛化成 `<BottomSheetGrid />` 可用於其他多選場景
 
 ---
@@ -49,14 +49,16 @@ API 同 v0.3；視覺實作改變。
 | 元素 | 規格 |
 |---|---|
 | Backdrop | `fixed inset-0 bg-black/40 z-40`；點擊 → `onClose()` |
-| Sheet container | `fixed inset-x-0 bottom-0 z-50 bg-surface-card rounded-t-2xl shadow-2xl pb-safe`（行動裝置 safe-area） |
-| Header | `relative flex items-center justify-center px-4 py-4 border-b border-gray-100` |
+| Sheet container | `fixed inset-x-0 bottom-0 z-50 bg-surface-card rounded-t-2xl shadow-2xl pb-[env(safe-area-inset-bottom)]`（行動裝置 safe-area） |
+| Header | `relative flex items-center justify-center px-4 py-4 border-b border-line-soft` |
 | Header title | `text-base font-medium text-ink-AAA` 「選擇類別」 |
-| Close button (右上) | `absolute right-3 top-3 w-8 h-8 flex items-center justify-center text-ink-AA`（icon `X`） |
-| Grid container | `grid grid-cols-3 gap-3 px-4 py-4` |
-| Option button | `h-11 rounded-md border text-sm leading-tight px-2 flex items-center justify-center text-center` |
-| Option（unselected） | `border-gray-200 text-ink-AA bg-white` |
-| Option（selected） | `border-red-500 text-red-500 bg-white`（**紅框 outline**，IMG_4879「全部」選中態） |
+| Close button (右上) | `absolute right-3 top-3 w-8 h-8 flex items-center justify-center text-ink-AA` + `focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand rounded`（icon `X`） |
+| Grid container（`role="radiogroup"`） | `grid grid-cols-3 gap-3 px-4 py-4` |
+| Option button | `h-11 rounded-md border text-sm leading-tight px-2 flex items-center justify-center text-center` + `focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand` |
+| Option（unselected） | `border-line text-ink-AA bg-surface-card` |
+| Option（selected） | `border-brand text-brand bg-surface-card`（**紅框 outline + 紅字**，對齊 IMG_4877「全部」選中態） |
+
+> v0.5 token 收斂：原 `border-gray-200` → `border-line`（003a v0.3）；`border-red-500` / `text-red-500` → `border-brand` / `text-brand`（003a v0.3 撤回 alert，紅色統一 brand）；`border-gray-100` → `border-line-soft`；`bg-white` → `bg-surface-card`。
 
 ```tsx
 'use client'
@@ -112,7 +114,7 @@ export function CategoryMenu({
         className="fixed inset-x-0 bottom-0 z-50 bg-surface-card rounded-t-2xl
                    shadow-2xl pb-[env(safe-area-inset-bottom)]"
       >
-        <header className="relative flex items-center justify-center px-4 py-4 border-b border-gray-100">
+        <header className="relative flex items-center justify-center px-4 py-4 border-b border-line-soft">
           <h2 id="category-sheet-title" className="text-base font-medium text-ink-AAA">
             選擇類別
           </h2>
@@ -120,12 +122,18 @@ export function CategoryMenu({
             type="button"
             aria-label="關閉"
             onClick={onClose}
-            className="absolute right-3 top-3 w-8 h-8 flex items-center justify-center text-ink-AA"
+            className="absolute right-3 top-3 w-8 h-8 flex items-center justify-center
+                       text-ink-AA focus-visible:outline focus-visible:outline-2
+                       focus-visible:outline-brand rounded"
           >
             <CloseIcon className="w-5 h-5" />
           </button>
         </header>
-        <div className="grid grid-cols-3 gap-3 px-4 py-4">
+        <div
+          role="radiogroup"
+          aria-labelledby="category-sheet-title"
+          className="grid grid-cols-3 gap-3 px-4 py-4"
+        >
           {OPTIONS.map((opt) => {
             const isSelected = opt.value === selectedCategory
             const key = opt.value ?? '__all__'
@@ -137,9 +145,10 @@ export function CategoryMenu({
                 aria-checked={isSelected}
                 onClick={() => { onSelect(opt.value); onClose() }}
                 className={`h-11 rounded-md border text-sm px-2 flex items-center justify-center text-center
+                  focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand
                   ${isSelected
-                    ? 'border-red-500 text-red-500 bg-white'
-                    : 'border-gray-200 text-ink-AA bg-white'}`}
+                    ? 'border-brand text-brand bg-surface-card'
+                    : 'border-line text-ink-AA bg-surface-card'}`}
               >
                 {opt.label}
               </button>
@@ -174,33 +183,36 @@ export function CategoryMenu({
 | 條件 | 呈現 |
 |---|---|
 | `isOpen=false` | `return null` |
-| `selectedCategory=null` | 「全部」option 紅框 |
-| `selectedCategory='animal_protection'` | 「動物保護」option 紅框 |
+| `selectedCategory=null` | 「全部」option 紅框紅字 |
+| `selectedCategory='animal_protection'` | 「動物保護」option 紅框紅字 |
 
 ---
 
 ## 6. 測試（colocated `CategoryMenu.test.tsx`）
 
 - `isOpen=false` → 不渲染 dialog
-- `isOpen=true` → 渲染 17 個 option（全部 + 16 categories）
-- `selectedCategory=null` → 「全部」option `aria-checked=true` 且帶紅框
-- `selectedCategory='animal_protection'` → 「動物保護」紅框
-- 點 option → onSelect + onClose 被呼叫
+- `isOpen=true` → 渲染 17 個 option（「全部」+ 16 categories；對齊 [002 §3.1 CATEGORY_KEYS](./002-list-data.md#3-schemas--srclibschemaslistts)）
+- 17 個 option 順序：第一個是「全部」，其後依 `CATEGORY_KEYS` 陣列順序展開
+- `selectedCategory=null` → 「全部」option `aria-checked=true` 且 className 含 `border-brand text-brand`
+- `selectedCategory='animal_protection'` → 「動物保護」option `aria-checked=true` 且 className 含 `border-brand text-brand`
+- 點 option → `onSelect(value)` + `onClose()` 各被呼叫一次
 - 點 X → onClose；不觸 onSelect
 - 點 backdrop → onClose
 - Esc → onClose
 - `isOpen=false` 時 → 不註冊 keydown listener
 - 開啟時 `document.body.style.overflow === 'hidden'`；關閉後 restore
+- ARIA：外層 `role="dialog" aria-modal="true" aria-labelledby="category-sheet-title"`；grid 外層 `role="radiogroup"`；每個 option `role="radio"`
 
 ---
 
 ## 7. a11y
 
 - `role="dialog" aria-modal="true" aria-labelledby="category-sheet-title"`
-- 17 個 options 用 `role="radio"` + `aria-checked`（單選性質，外層可加 `role="radiogroup"`）
+- 17 個 options 用 `role="radio"` + `aria-checked`（grid 外層 `role="radiogroup" aria-labelledby="category-sheet-title"`）
 - Backdrop button 有 `aria-label="關閉選單"`
 - 開啟時 body scroll lock；關閉 restore
 - focus trap：簡化不做完整 trap；用 Tab 在 sheet 內 button 之間循環
+- ARIA pair：trigger（[003k FilterButton](./003k-filter-button.md)）的 `aria-haspopup="dialog"` 與本元件 `role="dialog"` 對齊（v0.5 系統性修正）
 
 ---
 
@@ -219,3 +231,4 @@ export function CategoryMenu({
 |---|---|---|
 | 0.1-0.3 | 2026-06-13 ~ 14 | 原 dropdown 設計（anchor 在 FilterButton 下方） |
 | 0.4 | 2026-06-14 | 截圖補件 IMG_4879 / 4881：改 **bottom-sheet modal**（3 欄 grid + 紅框選中態 + X 關閉 + backdrop click + Esc + body scroll lock）；categories 6 → 17 options（全部 + 16） |
+| 0.5 | 2026-06-14 | token 收斂對齊 [003a v0.3](./003a-design-system.md#9-變更紀錄)：`border-gray-200` → `border-line`、`border-gray-100` → `border-line-soft`、`border-red-500` / `text-red-500` → `border-brand` / `text-brand`、`bg-white` → `bg-surface-card`；ARIA pair：與 [003k v0.4](./003k-filter-button.md#10-變更紀錄) `aria-haspopup="dialog"` 對齊；grid 外層補 `role="radiogroup" aria-labelledby`；option / X 按鈕補 `focus-visible:outline-brand` |
