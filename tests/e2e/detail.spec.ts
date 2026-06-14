@@ -50,6 +50,29 @@ test('進詳情頁後按 TopNav 返回 → 回到 list 頁', async ({ page }) =>
   await expect(page).toHaveURL(/\/donation$/)
 })
 
+test('lateral nav：item 詳情 → 查看團體 → 按返回直接回 list (skip item 詳情)', async ({
+  page,
+}) => {
+  // 從 list 進義賣商品詳情（這步是 push）
+  await page.goto('/donation?tab=item')
+  await page.getByRole('tab', { name: '義賣商品' }).click()
+  await page.getByRole('heading', {
+    level: 2,
+    name: '北歐天然｜貝比D - 液體維生素D3食品',
+  }).click()
+  await expect(page).toHaveURL(/\/sale-items\//)
+
+  // 點「查看團體 ›」（這步是 replace — 不堆 history）
+  await page.getByRole('link', { name: /查看團體/ }).click()
+  await expect(page).toHaveURL(/\/charities\//)
+
+  // 按返回 → 直接回 list (跳過 /sale-items)，且 tab 還原為 item
+  await page.getByRole('button', { name: '返回' }).click()
+  await expect(page).toHaveURL(/\/donation\?[^#]*tab=item/)
+  // 應該不是 /sale-items 詳情頁
+  await expect(page).not.toHaveURL(/\/sale-items\//)
+})
+
 test('detail page 未知 id → Next not-found', async ({ page }) => {
   const res = await page.goto(
     '/charities/00000000-0000-0000-0000-000000000000',

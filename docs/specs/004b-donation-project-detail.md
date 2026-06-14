@@ -70,7 +70,7 @@ export default async function Page({ params }) {
 | TopNav | [003b](./003b-topnav.md)，accessory = 分享 icon |
 | Cover | `<img src={coverImageUrl} alt={name} className="w-full aspect-[4/3] object-cover" />`；缺 → fallback |
 | Title block | `<h1>` + 字號（grey） |
-| 主辦團體 card | `<CharityChip charity />` — logo + 名稱 + 「查看團體 ›」`<Link href={`/charities/${charity.id}`}>` |
+| 主辦團體 card | `<CharityChip charity />` — logo + 名稱 + 「查看團體 ›」`<Link href={`/charities/${charity.id}`} replace>` ([§lateral nav 規則 004 §3.1](./004-detail-pages.md#31-橫向關聯導航策略v02-新增)) |
 | Categories tags | `<CategoryTags categories />` |
 | 專案內容 | `<section><h2>專案內容</h2><div className="prose">{content}</div></section>` |
 | Sticky CTA | `<StickyCta label="立即捐款" />` |

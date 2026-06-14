@@ -102,8 +102,11 @@ function CharityChip({
   charityName: string
 }) {
   return (
+    // replace（非 push）：spec 004 §「橫向關聯導航」— 詳情頁之間切換不堆疊
+    // history。從本頁按返回直接回 list，而不是回到「另一個詳情頁」。
     <Link
       href={`/charities/${charityId}`}
+      replace
       className="flex items-center justify-between gap-3 p-3 bg-black/5 rounded-xl
                  hover:bg-black/10
                  focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"

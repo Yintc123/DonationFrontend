@@ -68,7 +68,7 @@ export default async function Page({ params }) {
 | Cover + ribbon | `<SaleItemHero coverImageUrl name />` — 圖 + 絲帶 banner overlay（「公益義賣 SHOP FOR CHANGE」） |
 | 商品名 + 價格 | `<div><h1 className="text-base font-semibold">{name}</h1><p className="text-lg font-bold text-red-500">TWD {千分位}</p></div>` |
 | 字號區 | `<ApprovalNoList raisingApprovalNo reliefApprovalNo />` |
-| 主辦團體 chip | 同 004b §4 `<CharityChip>` |
+| 主辦團體 chip | 同 004b §4 `<CharityChip>`；用 `<Link href replace>` ([004 §3.1 lateral nav](./004-detail-pages.md#31-橫向關聯導航策略v02-新增)) |
 | Categories | `<CategoryTags />` |
 | 商品說明 | `<section><h2>商品說明</h2><div className="prose">{content}</div></section>` |
 | Sticky CTA | `<StickyCta label="立即捐款" />` |
