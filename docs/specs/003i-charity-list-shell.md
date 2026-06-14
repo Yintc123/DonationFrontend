@@ -1,6 +1,6 @@
 # Spec 003i：CharityListShell（feature）
 
-- **狀態**：Draft（v0.12 — search 模式空輸入也 Spinner + 藏 items（user 視為 no-result 變體）；TabsRow 規則不變）
+- **狀態**：Draft（v0.13 — Spinner 改在 list 區水平**+ 垂直**雙置中（list wrapper 加 flex flex-col、Spinner 容器加 flex-1）；TabsRow / 狀態規則不變）
 - **路徑**：`src/components/features/CharityListShell.tsx`
 - **依賴**：
   - [003a Design System](./003a-design-system.md)
@@ -192,15 +192,26 @@ const isPending = isSearching && normalizedDraft !== q
   </>
 )}
 
-// list 層（per ListPanel）— v0.12 統一規則
+// list 層（per ListPanel）— v0.12 統一規則 + v0.13 雙置中
 if (isSearching && (isPending || !q)) {
-  return <div className="flex justify-center mt-16"><Spinner label="搜尋中…" /></div>
+  // flex-1：搶滿 list 區可用高度（需父容器 flex flex-col）
+  // items-center justify-center：水平 + 垂直雙置中
+  return <div className="flex-1 flex items-center justify-center"><Spinner label="搜尋中…" /></div>
 }
 if (items.length === 0) {
   return <EmptyState illustration="…" title="查無相關資料" subtitle="…" />
 }
 return <Cards ... />
 ```
+
+> **v0.13 雙置中前置條件**：list wrapper 在 PreviewShell 必須是 `flex flex-col`：
+> ```tsx
+> <div className="flex-1 flex flex-col">
+>   <ListPanel ... />  {/* spinner branch 回 flex-1 div，吃滿高度 */}
+>   ...
+> </div>
+> ```
+> 沒 `flex flex-col` → spinner div 的 `flex-1` 沒效（父不是 flex 容器）→ 退回只水平置中。
 
 **為什麼空輸入也 Spinner**（v0.12）：
 
@@ -434,6 +445,7 @@ FilterButton label 更新為「動物保護 ▼」
 | 0.10 | 2026-06-14 | §3.4 「Search 模式 + 空 q 的 list 行為」改寫為 3 狀態：(1) debounce 進行中 → `<Spinner label="搜尋中…" />`（[003n 新規格](./003n-spinner.md)）；(2) 尚未輸入 → 純文字「請輸入關鍵字搜尋」（**移除 folder 圖示**，因為實際沒在 load 用 folder 語意誤導）；(3) 確認無結果 → 維持 folder「查無相關資料」。`<ListPanel>` 多接 `isPending` prop；`isPending = draft.trim().toLowerCase() !== q && draft.trim().length > 0` 在 Shell 計算 |
 | 0.11 | 2026-06-14 | 對齊 Figma 兩 frame：(1) `1:2247` 搜尋中 → search 模式 `isPending` 時**藏 TabsRow**（v0.7 把 tab 放下面是錯的，Figma 是 hidden）；(2) `1:2213` no result → debounce 落定 + q 有值 + 0 筆時 TabsRow 顯示 + folder EmptyState；(3) **移除**「請輸入關鍵字搜尋」純文字（Figma 不畫；q='' 不過濾、items 自然全顯）。對應 [003n v0.2](./003n-spinner.md) Spinner 改 iOS 8-spoke 樣式 |
 | 0.12 | 2026-06-14 | user 補規則：「打開搜尋列但沒任何字串時要出現 spinner 並且不能顯示底下物件」。改 ListPanel：`isSearching && (isPending \|\| !q)` → Spinner（v0.11 的 `q='' → 全顯 items` 被覆蓋）。`isPending` 拿掉 `length > 0` guard 讓清空 input 也走 spinner。TabsRow 規則不變（只 isPending 隱藏） |
+| 0.13 | 2026-06-14 | Spinner 改水平 + 垂直雙置中（v0.12 是 `flex justify-center mt-16` 只水平）：(1) list wrapper `<div>` 從 `flex-1` 改 `flex-1 flex flex-col`；(2) spinner 容器 `flex justify-center mt-16` 改 `flex-1 flex items-center justify-center`；spinner 中心 ≈ list 區中心（mobile 390 viewport 量測 spinner.y=466.5 vs listCenter=466 差 0.5px） |
 
 ---
 

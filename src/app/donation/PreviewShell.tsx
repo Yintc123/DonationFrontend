@@ -115,7 +115,8 @@ export function PreviewShell({
             </div>
           </>
         )}
-        <div className="flex-1">
+        {/* flex flex-col 讓 ListPanel 內的 spinner 容器 flex-1 可垂直填滿 */}
+        <div className="flex-1 flex flex-col">
           <ListPanel
             resource="charity"
             active={activeTab === 'charity'}
@@ -205,8 +206,10 @@ function ListPanel<T extends Charity | Donation | Item>({
   //   q && 0 筆       → folder no-data（Figma 1:2213）
   //   q && >0 筆      → 渲染 cards
   if (isSearching && (isPending || !q)) {
+    // flex-1：搶滿 list 區可用高度（PreviewShell 把 list wrapper 設 flex flex-col）
+    // items-center justify-center：水平 + 垂直雙置中
     return (
-      <div className="flex justify-center mt-16">
+      <div className="flex-1 flex items-center justify-center">
         <Spinner label="搜尋中…" />
       </div>
     )
