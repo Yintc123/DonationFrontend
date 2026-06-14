@@ -162,4 +162,12 @@ GET /api/charities?q=...&cursor=<nextCursor>
 
 ---
 
-最後更新：2026-06-13
+## 8. SPA 導航、scroll 還原、跨頁 state
+
+頁面切換是 SPA（Next 叫 soft navigation），按返回會記憶 scroll 與 tab — 這不是我們刻的，是 Next.js App Router runtime 預設行為 + URL searchParams 的協作結果。
+
+詳細機制（含與其他 SPA framework 對照、useUrlSync 的 guard 邏輯、未來失敗場景緩解）見：[navigation-and-state.md](./navigation-and-state.md)。
+
+---
+
+最後更新：2026-06-14
