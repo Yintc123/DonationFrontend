@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "JKODonation",
@@ -17,7 +18,9 @@ export default function RootLayout({
     // 此屬性僅壓制 <html> 一層的不匹配，不會掩蓋子節點真實 hydration bug。
     // 參考：Next 16 docs 01-app/02-guides/preventing-flash-before-hydration.md
     <html lang="zh-Hant" className="h-full antialiased" suppressHydrationWarning>
-      <body className="min-h-dvh flex flex-col bg-surface-page">{children}</body>
+      <body className="min-h-dvh flex flex-col bg-surface-page">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
