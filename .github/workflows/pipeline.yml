@@ -25,7 +25,7 @@ env:
   AWS_REGION: ap-southeast-2
   ECR_REPOSITORY: jko_frontend
   ECS_CLUSTER: warmhearted-crocodile-18gqvo-jko-cluster
-  ECS_SERVICE: REPLACE_AFTER_FIRST_DEPLOY
+  ECS_SERVICE: jko-frontend-service-855682kh
   CONTAINER_NAME: jko-frontend
   TASK_DEFINITION: .aws/task-definition.json
 
