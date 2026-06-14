@@ -1,0 +1,16 @@
+// Spec 002 §2 / backend 016 §3 — public charity list BFF.
+// Upstream: GET /v1/donation/charities
+
+import 'server-only'
+
+import { createListRoute } from '@/lib/api/createListRoute'
+import {
+  BackendCharityListItem,
+  toClientCharity,
+} from '@/lib/schemas/list'
+
+export const GET = createListRoute({
+  upstream: '/v1/donation/charities',
+  backendItemSchema: BackendCharityListItem,
+  toClientItem: toClientCharity,
+})
