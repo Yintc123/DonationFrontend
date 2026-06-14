@@ -1,6 +1,6 @@
 # Spec 003i：CharityListShell（feature）
 
-- **狀態**：Draft（v0.10 — search 模式 list 從 2 狀態擴為 3 狀態：debounce 進行中改用 [003n Spinner](./003n-spinner.md) 取代資料夾圖示）
+- **狀態**：Draft（v0.11 — 對齊 Figma frame `1:2247`「搜尋中」+ `1:2213`「no result」：search 模式 `isPending` 時藏 TabsRow + 顯示 24×24 iOS spinner；移除「請輸入關鍵字搜尋」文字提示（Figma 不畫））
 - **路徑**：`src/components/features/CharityListShell.tsx`
 - **依賴**：
   - [003a Design System](./003a-design-system.md)
@@ -161,33 +161,52 @@ export function CharityListShell({
 | 切 tab | 兩模式都允許切 tab（tab 在 search 模式仍可見、可點） |
 | 開 CategoryMenu | 僅 browse 模式可達（search 模式無 FilterButton） |
 
-#### Search 模式的 list 三狀態（v0.10 改寫）
+#### Search 模式的 layout 狀態（v0.11 對齊 Figma）
 
-`isSearching=true` 時 list 區域用以下三狀態決定畫面（按優先順序）：
+對應 Figma 兩個 frame：
 
-| 狀態 | 條件 | 渲染 |
-|---|---|---|
-| **debounce 進行中** | `isPending`（`draft.trim().toLowerCase() !== q` 且 `draft` 非空） | [`<Spinner label="搜尋中…" />`](./003n-spinner.md) |
-| **尚未輸入** | `!q && !isPending` | 純文字 `<p>請輸入關鍵字搜尋</p>`（**無**插畫、**無** spinner — 因為實際上沒在 load） |
-| **無結果** | `q && items.length === 0` | `<EmptyState illustration="empty-no-data.png" title="查無相關資料" subtitle="請調整關鍵字再重新搜尋" />`（資料夾圖示對「確認後無結果」語意合理） |
+| Figma frame | 狀態 | TabsRow | list 區 |
+|---|---|---|---|
+| **`1:2247` 分類列表 - 搜尋中** | `isPending`（typing / debounce 進行中） | **隱藏**（純展示 SearchBar + 鍵盤 + 中央 spinner） | [`<Spinner />`](./003n-spinner.md) 24×24 居中 |
+| **`1:2213` 搜尋 - No Result** | `!isPending && q && items.length === 0` | 顯示（user 可切 tab 看別 tab 有無結果） | `<EmptyState illustration="empty-no-data.png" title="查無相關資料" subtitle="請調整關鍵字再重新搜尋" />` |
+| （Figma 未繪）`!isPending && q && items.length > 0` | settled / 有結果 | 顯示 | 直接渲染 cards |
+| （Figma 未繪）`!isPending && !q` | search 模式 + 空輸入 | 顯示 | 直接渲染 all cards（`q=''` 不過濾） |
 
 ```tsx
 const normalizedDraft = draft.trim().toLowerCase()
 const isPending = isSearching && normalizedDraft.length > 0 && normalizedDraft !== q
 
-if (isSearching) {
-  if (isPending) return <div className="flex justify-center mt-16"><Spinner label="搜尋中…" /></div>
-  if (!q)        return <p className="mt-16 text-center text-sm text-ink-A">請輸入關鍵字搜尋</p>
-  // q 有值且 items.length === 0 落到下面通用 EmptyState 分支
+// chrome 層
+{isSearching ? (
+  <>
+    <SearchBar ... />
+    {/* Figma 1:2247：debounce 進行中時藏 TabsRow */}
+    {!isPending && <TabsRow ... />}
+  </>
+) : (
+  <>
+    <TabsRow ... />
+    <FilterRow ... />
+  </>
+)}
+
+// list 層（per ListPanel）
+if (isSearching && isPending) {
+  return <div className="flex justify-center mt-16"><Spinner label="搜尋中…" /></div>
 }
-if (items.length === 0) return <EmptyState illustration="…" title="查無相關資料" subtitle="…" />
+if (items.length === 0) {
+  return <EmptyState illustration="…" title="查無相關資料" subtitle="…" />
+}
+return <Cards ... />
 ```
 
-**為什麼 3 狀態而非 2**：
-- v0.8 把「尚未輸入」跟「pending」都塞同一個 folder + 「請輸入關鍵字搜尋」EmptyState，**folder 圖示對「正在 load」語意誤導** — user 會疑惑「我在 load 什麼？」
-- v0.10 拆開：spinner 用在真實 loading（debounce 中），純文字提示用在「等你輸入」，folder 留給「確認後無結果」
+**為什麼 isPending 時藏 TabsRow**：
+- Figma frame `1:2247` 結構**完全沒有** Tabs node — 設計師明確要 user 在 typing 過程中專注於 search bar + 結果，不被 tab 切換干擾
+- debounce 落定後（`!isPending`）→ Tabs 重新出現（frame `1:2213` 含 Tabs），user 可切換看別 tab
 
-對齊 iOS Mail / Apple HIG 的 search loading 視覺（spinner near search bar 表示「正在 search」）。
+**為什麼移除「請輸入關鍵字搜尋」文字**：
+- Figma 沒畫；搜尋 + 空 draft 時直接顯示全部 items（`q=''` 等於沒過濾）
+- 之前我加文字是猜的，現在改為 Figma 一致
 
 **`isPending` 推導**：
 - `draft` = SearchBar 即時 value（每 keystroke 更新）
@@ -405,6 +424,7 @@ FilterButton label 更新為「動物保護 ▼」
 | 0.8 | 2026-06-14 | (1) §3.4 Transition 表標注「進 search 模式後藍色取消按鈕**立即**出現」，對齊 [003c v0.3](./003c-searchbar.md#5-變體) 取消鈕顯示規則修正；(2) 新 §3.4「Search 模式 + 空 q 的 list 行為」— search 模式且 `q===''` 時 list 不渲染卡片、顯示 `<EmptyState title="請輸入關鍵字搜尋" />`，對齊 iOS Mail / Apple HIG search behavior；(3) `<ListPanel>` 多接 `isSearching` prop 控分支 |
 | 0.9 | 2026-06-14 | 新 §3.5 RWD container：chrome + list 包在響應式 `<main>` 內（mobile/tablet/desktop max-w = 480/768/1024）；CategoryMenu 留在頁面層級不受 main 容器限制（fixed positioning 自處理 [003m §3](./003m-category-menu.md#3-anatomy) 限寬置中）。對齊 [003a §5 v0.4 3-tier](./003a-design-system.md#5-rwdv04-3-tier) |
 | 0.10 | 2026-06-14 | §3.4 「Search 模式 + 空 q 的 list 行為」改寫為 3 狀態：(1) debounce 進行中 → `<Spinner label="搜尋中…" />`（[003n 新規格](./003n-spinner.md)）；(2) 尚未輸入 → 純文字「請輸入關鍵字搜尋」（**移除 folder 圖示**，因為實際沒在 load 用 folder 語意誤導）；(3) 確認無結果 → 維持 folder「查無相關資料」。`<ListPanel>` 多接 `isPending` prop；`isPending = draft.trim().toLowerCase() !== q && draft.trim().length > 0` 在 Shell 計算 |
+| 0.11 | 2026-06-14 | 對齊 Figma 兩 frame：(1) `1:2247` 搜尋中 → search 模式 `isPending` 時**藏 TabsRow**（v0.7 把 tab 放下面是錯的，Figma 是 hidden）；(2) `1:2213` no result → debounce 落定 + q 有值 + 0 筆時 TabsRow 顯示 + folder EmptyState；(3) **移除**「請輸入關鍵字搜尋」純文字（Figma 不畫；q='' 不過濾、items 自然全顯）。對應 [003n v0.2](./003n-spinner.md) Spinner 改 iOS 8-spoke 樣式 |
 
 ---
 

@@ -87,31 +87,30 @@ test('進 search 模式：「取消」按鈕立即出現（即使還沒打字）
   await expect(page.getByRole('button', { name: '取消' })).toBeVisible()
 })
 
-test('search 模式 + 還沒打字 → 純文字「請輸入關鍵字搜尋」（無 spinner、無 folder）', async ({
+test('search 模式 + 還沒打字 → TabsRow 在、items 全顯（對齊 Figma：q="" 不過濾）', async ({
   page,
 }) => {
   await page.goto('/donation')
   await page.getByRole('button', { name: '開啟搜尋' }).click()
-  // 純文字提示出現
-  await expect(page.getByText('請輸入關鍵字搜尋')).toBeVisible()
-  // 卡片 heading 不應渲染
+  // TabsRow 仍在（!isPending 時 Figma 1:2213 樣式）
+  await expect(page.getByRole('tab', { name: '公益團體' })).toBeVisible()
+  // 全部 items 自然顯示（q='' 不過濾）
   await expect(
     page.getByRole('heading', { level: 2, name: 'ACC 中華耆幼關懷協會' }),
-  ).toHaveCount(0)
-  // 無 spinner、無 folder illustration
-  await expect(page.getByRole('status', { name: '搜尋中…' })).toHaveCount(0)
+  ).toBeVisible()
 })
 
-test('search 模式打字中 → Spinner「搜尋中…」（debounce 300ms 內）', async ({
+test('search 模式 isPending → Figma 1:2247：藏 TabsRow + 顯示 Spinner', async ({
   page,
 }) => {
   await page.goto('/donation')
   await page.getByRole('button', { name: '開啟搜尋' }).click()
-  // 一打字、debounce 還沒到 → spinner role="status" 出現
+  // 一打字、debounce 還沒到 → spinner 出現、TabsRow 消失
   await page.getByRole('searchbox').fill('魚油')
   await expect(
     page.getByRole('status', { name: '搜尋中…' }),
   ).toBeVisible({ timeout: 200 })
+  await expect(page.getByRole('tab', { name: '公益團體' })).toHaveCount(0)
 })
 
 test('search 模式打字後 → empty 提示消失，卡片或查無結果出現', async ({

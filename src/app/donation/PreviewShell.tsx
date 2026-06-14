@@ -95,9 +95,13 @@ export function PreviewShell({
                 }}
               />
             </div>
-            <div className="mt-[6px]">
-              <TabsRow active={activeTab} onTabChange={setActiveTab} />
-            </div>
+            {/* Figma 1:2247 「搜尋中」狀態：debounce 進行中時藏 TabsRow。
+                debounce 落定 → TabsRow 重新出現（1:2213「no result」狀態）。*/}
+            {!isPending && (
+              <div className="mt-[6px]">
+                <TabsRow active={activeTab} onTabChange={setActiveTab} />
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -195,26 +199,16 @@ function ListPanel<T extends Charity | Donation | Item>({
 }) {
   if (!active) return <div hidden aria-hidden />
 
-  // search 模式的 3 狀態（spec 003i §3.4）：
-  //   isPending → <Spinner label="搜尋中…" />   debounce-in-flight，最積極
-  //   !q        → 純文字「請輸入關鍵字搜尋」      尚未輸入，無 loading 意涵
-  //   q + 0 筆 → folder「查無相關資料」          確認過、無結果
-  if (isSearching) {
-    if (isPending) {
-      return (
-        <div className="flex justify-center mt-16">
-          <Spinner label="搜尋中…" />
-        </div>
-      )
-    }
-    if (!q) {
-      return (
-        <p className="mt-16 text-center text-sm text-ink-A">
-          請輸入關鍵字搜尋
-        </p>
-      )
-    }
-    // q 有值且 items 0 → 落到下面 EmptyState「查無相關資料」
+  // search 模式（spec 003i §3.4，對齊 Figma 1:2247 / 1:2213）：
+  //   isPending  → Figma `shimmer` 24×24 居中（無文字、無 TabsRow）
+  //   else       → 落到「items 0 筆 → folder no-data」或「直接渲染 items」
+  // empty q 不再顯示「請輸入關鍵字搜尋」提示（Figma 不畫；q='' 自然落到渲染所有 items）
+  if (isSearching && isPending) {
+    return (
+      <div className="flex justify-center mt-16">
+        <Spinner label="搜尋中…" />
+      </div>
+    )
   }
 
   if (items.length === 0) {

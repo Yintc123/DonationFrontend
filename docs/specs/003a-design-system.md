@@ -91,6 +91,7 @@ fontFamily: {
 | `empty-no-data.png` | `I1:2216;49:128` | 1536×1536 | [003g EmptyState](./003g-empty-state.md) illustration（顯示 144×144） |
 | `icon-magnifier.svg` | `I1:2224;728:30936` | 20×20 | [003c SearchBar](./003c-searchbar.md) 放大鏡（黑 50% opacity） |
 | `icon-chevron-left.svg` | `I1:2214;104:6495;104:6488;104:6481` | 24×24 | [003b TopNav](./003b-topnav.md) 返回按鈕（白） |
+| `shimmer.png` | `1:1017` | 24×24 | [003n Spinner](./003n-spinner.md) 視覺參考（實作為 inline SVG，非引用此檔；下載僅用於設計 review）|
 
 引用：`<Image src="/figma/..." />` 或 `<img>`。SVG 不需 inline 化（不依賴 `currentColor`）。
 
