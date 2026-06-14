@@ -748,11 +748,19 @@ export function useUrlSync(params: Record<string, string | undefined>) {
       if (v && v.length > 0) next.set(k, v)
       else next.delete(k)
     }
-    const qs = next.toString()
-    router.replace(qs ? `?${qs}` : '', { scroll: false })
+    const newQs = next.toString()
+    const currentQs = searchParams.toString()
+    if (newQs === currentQs) return // 已同步，避免無限 loop
+    router.replace(newQs ? `?${newQs}` : '', { scroll: false })
   }, [router, searchParams, ...Object.values(params)])
 }
 ```
+
+> **必須 guard `newQs === currentQs`**：
+> `router.replace` 在 Next 16 dev 會觸發 RSC payload fetch（即使 URL 相同）；
+> `useSearchParams` 是 useEffect deps、會在每次 navigation 回來時換 reference；
+> 不 guard → `replace → searchParams 新 ref → effect 再 fire → 又 replace` 無限迴圈，
+> 對使用者觀感為「進列表頁後不停 call /donation」。
 
 呼叫：
 

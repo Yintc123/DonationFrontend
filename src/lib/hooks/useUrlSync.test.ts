@@ -17,19 +17,33 @@ describe('useUrlSync', () => {
     currentSearch = ''
   })
 
-  it('全部空 → router.replace 收到空 path（不留 ?）', () => {
-    renderHook(() => useUrlSync({ q: '', tab: undefined, category: undefined }))
-    expect(replaceMock).toHaveBeenCalledWith('', { scroll: false })
+  it('URL 已是空 + 所有 params 都空 → 不呼叫 replace（避免無限 loop）', () => {
+    renderHook(() =>
+      useUrlSync({ q: '', tab: undefined, category: undefined }),
+    )
+    expect(replaceMock).not.toHaveBeenCalled()
   })
 
-  it('q 有值 → ?q=foo', () => {
+  it('URL 已含目標 params + 給的 values 跟 URL 一致 → 不呼叫 replace（防無限迴圈核心）', () => {
+    currentSearch = 'tab=item&category=animal_protection'
+    renderHook(() =>
+      useUrlSync({
+        q: undefined,
+        tab: 'item',
+        category: 'animal_protection',
+      }),
+    )
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it('q 有值 但 URL 沒 → ?q=foo', () => {
     renderHook(() =>
       useUrlSync({ q: 'foo', tab: undefined, category: undefined }),
     )
     expect(replaceMock).toHaveBeenCalledWith('?q=foo', { scroll: false })
   })
 
-  it('tab + category → ?tab=item&category=animal_protection', () => {
+  it('tab + category 從空 URL 寫入', () => {
     renderHook(() =>
       useUrlSync({
         q: '',
@@ -37,14 +51,11 @@ describe('useUrlSync', () => {
         category: 'animal_protection',
       }),
     )
-    expect(replaceMock).toHaveBeenCalledWith(
-      expect.stringContaining('tab=item'),
-      { scroll: false },
-    )
-    expect(replaceMock).toHaveBeenCalledWith(
-      expect.stringContaining('category=animal_protection'),
-      { scroll: false },
-    )
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+    const [url, opts] = replaceMock.mock.calls[0]
+    expect(url).toContain('tab=item')
+    expect(url).toContain('category=animal_protection')
+    expect(opts).toEqual({ scroll: false })
   })
 
   it('既有 URL searchParams 保留未指定的 key', () => {
