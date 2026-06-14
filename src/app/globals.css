@@ -29,6 +29,43 @@
 
   /* Font stack — PingFang TC（macOS/iOS）→ Noto Sans TC → system-ui */
   --font-sans: "PingFang TC", "Noto Sans TC", system-ui, sans-serif;
+
+  /* Bottom-sheet 動畫（003m CategoryMenu）— 用 CSS keyframes 避開 React
+   * 多 commit 才能觸發 transition 的時序問題。`both` 鎖定起點/終點，
+   * exit 動畫結束後元素停在 translate-y-full / opacity-0，
+   * 由 onAnimationEnd handler 觸發 unmount。 */
+  --animate-slide-up-enter: slide-up-enter 300ms ease-out both;
+  --animate-slide-down-exit: slide-down-exit 300ms ease-out both;
+  --animate-fade-in-bg: fade-in-bg 300ms ease-out both;
+  --animate-fade-out-bg: fade-out-bg 300ms ease-out both;
+}
+
+@keyframes slide-up-enter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes slide-down-exit {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+@keyframes fade-in-bg {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-out-bg {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* prefers-reduced-motion 安全網：動畫縮為 1ms（無感）但 animationend
+ * 仍會 fire，確保 unmount 邏輯不被卡住。 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up-enter,
+  .animate-slide-down-exit,
+  .animate-fade-in-bg,
+  .animate-fade-out-bg {
+    animation-duration: 1ms !important;
+  }
 }
 
 html, body {

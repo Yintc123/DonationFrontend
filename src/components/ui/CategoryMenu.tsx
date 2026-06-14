@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type AnimationEvent } from 'react'
 import {
   CATEGORY_KEYS,
   CATEGORY_LABELS,
@@ -17,9 +17,6 @@ const OPTIONS: { value: CategoryKey | null; label: string }[] = [
   { value: null, label: '全部' },
   ...CATEGORY_KEYS.map((value) => ({ value, label: CATEGORY_LABELS[value] })),
 ]
-
-/** Animation timing — 與 spec 003m §3 對應 */
-const ANIM_MS = 300
 
 function CloseIcon({ className }: { className?: string }) {
   return (
@@ -40,32 +37,17 @@ export function CategoryMenu({
   onSelect,
   onClose,
 }: CategoryMenuProps) {
-  // 兩階段 state：
-  //   shouldRender — 控 DOM 是否 mount（open 立即 true、close 延遲 ANIM_MS 才 false）
-  //   isVisible    — 控 transition 終值（open 用 rAF 延後一格、close 立即 false）
-  // 沒兩階段就無法「mount-然後動畫進入」/「動畫退出-再 unmount」。
+  // Mount-on-open；unmount 由 `onAnimationEnd` 觸發（exit keyframe 跑完才 unmount）。
+  // 純 CSS keyframes 不需要 isVisible 雙 state、不依賴 React 兩次 commit。
   const [shouldRender, setShouldRender] = useState(isOpen)
-  const [isVisible, setIsVisible] = useState(false)
 
-  // Enter / exit animation orchestration — set-state-in-effect rule 對
-  // 「mount-then-animate-in / animate-out-then-unmount」這類動畫模式不適用：
-  // 我們需要分兩個 commit phase 才能讓 transition 看得到差別，整個 block
-  // 都是合法寫法（無 render loop 風險）。
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (isOpen) {
-      setShouldRender(true)
-      const raf = requestAnimationFrame(() => setIsVisible(true))
-      return () => cancelAnimationFrame(raf)
-    }
-    setIsVisible(false)
-    const t = setTimeout(() => setShouldRender(false), ANIM_MS)
-    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isOpen) setShouldRender(true)
   }, [isOpen])
-  /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Esc + body scroll lock 綁 isOpen（不綁 shouldRender）：
-  // close 後 ANIM_MS 內仍可見 sheet 退出動畫，但鍵盤 / scroll 已交還使用者。
+  // Esc + body scroll lock 綁 isOpen：close 後鍵盤 / scroll 立即交還使用者，
+  // 即使 sheet 退出動畫仍在跑。
   useEffect(() => {
     if (!isOpen) return
     const onKey = (e: KeyboardEvent) => {
@@ -80,6 +62,13 @@ export function CategoryMenu({
     }
   }, [isOpen, onClose])
 
+  // exit keyframe 跑完才 unmount；slide-up-enter 結束時不動 shouldRender。
+  const handleSheetAnimationEnd = (e: AnimationEvent<HTMLElement>) => {
+    if (!isOpen && e.animationName === 'slide-down-exit') {
+      setShouldRender(false)
+    }
+  }
+
   if (!shouldRender) return null
 
   return (
@@ -93,16 +82,17 @@ export function CategoryMenu({
         aria-label="關閉選單"
         onClick={onClose}
         className={`fixed inset-0 z-40 bg-black/40 cursor-default
-                    transition-opacity duration-300 ease-out
-                    motion-reduce:transition-none
-                    ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+                    ${isOpen ? 'animate-fade-in-bg' : 'animate-fade-out-bg'}`}
       />
       <section
+        onAnimationEnd={handleSheetAnimationEnd}
         className={`fixed inset-x-0 bottom-0 z-50 bg-surface-card rounded-t-2xl
                     shadow-2xl pb-[env(safe-area-inset-bottom)]
-                    transition-transform duration-300 ease-out
-                    motion-reduce:transition-none
-                    ${isVisible ? 'translate-y-0' : 'translate-y-full'}`}
+                    ${
+                      isOpen
+                        ? 'animate-slide-up-enter'
+                        : 'animate-slide-down-exit'
+                    }`}
       >
         <header className="relative flex items-center justify-center px-4 py-4 border-b border-line-soft">
           <h2

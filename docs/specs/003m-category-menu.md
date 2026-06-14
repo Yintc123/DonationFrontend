@@ -1,6 +1,6 @@
 # Spec 003m：CategoryMenu（bottom-sheet modal）
 
-- **狀態**：Draft（v0.6 — 加 slide-in/out 動畫；2-state mount-after-anim pattern）
+- **狀態**：Draft（v0.7 — 動畫改 CSS keyframes 配 onAnimationEnd；解決 v0.6 React batching 導致 slide-in 看不到的問題）
 - **路徑**：`src/components/ui/CategoryMenu.tsx`
 - **依賴**：
   - [003a Design System](./003a-design-system.md)
@@ -48,8 +48,8 @@ API 同 v0.3；視覺實作改變。
 
 | 元素 | 規格 |
 |---|---|
-| Backdrop | `fixed inset-0 bg-black/40 z-40 transition-opacity duration-300 ease-out motion-reduce:transition-none`；open 切 `opacity-100`、close 切 `opacity-0`；點擊 → `onClose()` |
-| Sheet container | `fixed inset-x-0 bottom-0 z-50 bg-surface-card rounded-t-2xl shadow-2xl pb-[env(safe-area-inset-bottom)] transition-transform duration-300 ease-out motion-reduce:transition-none`；open 切 `translate-y-0`、close 切 `translate-y-full` |
+| Backdrop | `fixed inset-0 bg-black/40 z-40`；open 套 `animate-fade-in-bg`、close 套 `animate-fade-out-bg`；點擊 → `onClose()` |
+| Sheet container | `fixed inset-x-0 bottom-0 z-50 bg-surface-card rounded-t-2xl shadow-2xl pb-[env(safe-area-inset-bottom)]`；open 套 `animate-slide-up-enter`、close 套 `animate-slide-down-exit`；綁 `onAnimationEnd` 偵測 `slide-down-exit` 結束才 unmount |
 | Header | `relative flex items-center justify-center px-4 py-4 border-b border-line-soft` |
 | Header title | `text-base font-medium text-ink-AAA` 「選擇類別」 |
 | Close button (右上) | `absolute right-3 top-3 w-8 h-8 flex items-center justify-center text-ink-AA` + `focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand rounded`（icon `X`） |
@@ -60,42 +60,64 @@ API 同 v0.3；視覺實作改變。
 
 > v0.5 token 收斂：原 `border-gray-200` → `border-line`（003a v0.3）；`border-red-500` / `text-red-500` → `border-brand` / `text-brand`（003a v0.3 撤回 alert，紅色統一 brand）；`border-gray-100` → `border-line-soft`；`bg-white` → `bg-surface-card`。
 
-### 3.1 動畫機制（v0.6 新增）
+### 3.1 動畫機制（v0.7 改 CSS keyframes）
 
-slide-in/out 需要「mount → 下一格才進入終態 / 退出後等動畫結束才 unmount」。元件內用 **2 state** 控：
+slide-in/out 用 **CSS `@keyframes` + `onAnimationEnd`** 控，**不**用 React state 觸發 transition。
 
-| state | 控什麼 | open 時 | close 時 |
-|---|---|---|---|
-| `shouldRender` | DOM 是否 mount | 立即 `true` | 延遲 `ANIM_MS` (300ms) 才 `false` |
-| `isVisible` | transition 終值（`translate-y-0` / `opacity-100`） | `requestAnimationFrame` 後 `true` | 立即 `false` |
+**為什麼不用 v0.6 的 transition + 2-state pattern**：v0.6 設計上對，但 React 19 把 `setShouldRender(true)` 跟 rAF 內的 `setIsVisible(true)` batch 成同一 commit、首次 paint 就在終態 → slide-in 不會動（看起來突然出現）。雙 rAF / `flushSync` 都不保證跨 browser/React 版本穩定。**keyframes 不依賴多次 commit**，從 mount 那一刻 CSS 自己跑、沒 batching 風險。
+
+**keyframes 定義在 `globals.css`**：
+
+```css
+@theme {
+  --animate-slide-up-enter: slide-up-enter 300ms ease-out both;
+  --animate-slide-down-exit: slide-down-exit 300ms ease-out both;
+  --animate-fade-in-bg: fade-in-bg 300ms ease-out both;
+  --animate-fade-out-bg: fade-out-bg 300ms ease-out both;
+}
+@keyframes slide-up-enter   { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes slide-down-exit  { from { transform: translateY(0); }   to { transform: translateY(100%); } }
+@keyframes fade-in-bg       { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-out-bg      { from { opacity: 1; } to { opacity: 0; } }
+```
+
+`both` 鎖定 keyframe 起點 + 終點：exit keyframe 結束後元素停在 `translate-y-full`，視覺對齊「滑出畫面後消失」。
+
+**元件層只需 1 state + onAnimationEnd**：
 
 ```tsx
 const [shouldRender, setShouldRender] = useState(isOpen)
-const [isVisible, setIsVisible] = useState(false)
+useEffect(() => { if (isOpen) setShouldRender(true) }, [isOpen])
 
-useEffect(() => {
-  if (isOpen) {
-    setShouldRender(true)
-    // 先 mount 在 translate-y-full，下一格才切到 translate-y-0
-    const raf = requestAnimationFrame(() => setIsVisible(true))
-    return () => cancelAnimationFrame(raf)
-  }
-  setIsVisible(false)
-  const t = setTimeout(() => setShouldRender(false), ANIM_MS)
-  return () => clearTimeout(t)
-}, [isOpen])
+const onAnimEnd = (e: React.AnimationEvent) => {
+  if (!isOpen && e.animationName === 'slide-down-exit') setShouldRender(false)
+}
 
 if (!shouldRender) return null
+return (
+  <div role="dialog" ...>
+    <button className={isOpen ? 'animate-fade-in-bg' : 'animate-fade-out-bg'} ... />
+    <section
+      onAnimationEnd={onAnimEnd}
+      className={isOpen ? 'animate-slide-up-enter' : 'animate-slide-down-exit'}
+    >
+      ...
+    </section>
+  </div>
+)
 ```
 
-**為什麼不能單一 state**：直接 `if (!isOpen) return null` 配 transition 是不會動的 — React unmount/mount 沒有「上一格 vs 下一格」差別。沒 rAF 延遲就 batch render 在終態、跳過 transition；沒 setTimeout 延遲就 close 立即 unmount、看不到退出動畫。
+**為什麼 onAnimationEnd 只認 `slide-down-exit`**：
+- backdrop 的 fade-out 也會 fire 一次 animationend
+- 進場 slide-up-enter 結束也會 fire
+- 漏判任一個都會在錯的時機 unmount。比對 `animationName` 精準鎖定 exit。
 
-**為什麼 Esc / scroll lock 綁 `isOpen` 而非 `shouldRender`**：close 後鍵盤 + scroll 應立即交還使用者；sheet 退出動畫進行中再按 Esc 也不該重觸 onClose。
+**為什麼 Esc / scroll lock 綁 `isOpen` 而非 `shouldRender`**（同 v0.6）：close 後鍵盤 + scroll 立即交還使用者；sheet 退出動畫進行中再按 Esc 也不該重觸 onClose。
 
-**Animation timing**（[003a §2](./003a-design-system.md#2-顏色-token) 之外的設計選擇）：
+**Animation timing**：
 - duration 300ms — 對應 Tailwind `duration-300`、Material Design 「standard easing」短時長
-- ease-out — 入場慢入快出觀感較自然（退場用同曲線即可）
-- 不需自定 keyframes — 用 Tailwind utility `translate-y-full ↔ translate-y-0` + `opacity-0 ↔ opacity-100` 切態即足夠
+- ease-out — 入場慢入快出較自然
+- prefers-reduced-motion: `globals.css` `@media` 把 duration 強壓 `1ms`（不是 `animation: none`）— 視覺無感但 `animationend` 仍 fire，unmount 邏輯不會卡
 
 ```tsx
 'use client'
@@ -239,10 +261,11 @@ export function CategoryMenu({
 - `isOpen=false` 時 → 不註冊 keydown listener
 - 開啟時 `document.body.style.overflow === 'hidden'`；關閉後 restore
 - ARIA：外層 `role="dialog" aria-modal="true" aria-labelledby="category-sheet-title"`；grid 外層 `role="radiogroup"`；每個 option `role="radio"`
-- 動畫（v0.6 新增 3 案例）：
-  - sheet `<section>` 含 `transition-transform duration-300 motion-reduce:transition-none` class
-  - mount 後 `requestAnimationFrame` 觸發、`translate-y-full` → `translate-y-0`（用 `waitFor`）
-  - close 後 sheet 不立即 unmount，`vi.useFakeTimers` + `vi.advanceTimersByTime(350)` 配 `act` flush 才 unmount
+- 動畫（v0.7 改 keyframes 後 4 案例）：
+  - open 時 sheet 套 `animate-slide-up-enter`、backdrop 套 `animate-fade-in-bg`
+  - close 後 sheet 切到 `animate-slide-down-exit`、backdrop 切到 `animate-fade-out-bg`，仍在 DOM
+  - `fireEvent.animationEnd(section, { animationName: 'slide-down-exit' })` → 才 unmount；其他 animationName 不會誤 unmount
+  - `isOpen=true` 時觸 `slide-up-enter` 結束 → 不會誤 unmount
 
 ---
 
@@ -275,3 +298,4 @@ export function CategoryMenu({
 | 0.4 | 2026-06-14 | 截圖補件 IMG_4879 / 4881：改 **bottom-sheet modal**（3 欄 grid + 紅框選中態 + X 關閉 + backdrop click + Esc + body scroll lock）；categories 6 → 17 options（全部 + 16） |
 | 0.5 | 2026-06-14 | token 收斂對齊 [003a v0.3](./003a-design-system.md#9-變更紀錄)：`border-gray-200` → `border-line`、`border-gray-100` → `border-line-soft`、`border-red-500` / `text-red-500` → `border-brand` / `text-brand`、`bg-white` → `bg-surface-card`；ARIA pair：與 [003k v0.4](./003k-filter-button.md#10-變更紀錄) `aria-haspopup="dialog"` 對齊；grid 外層補 `role="radiogroup" aria-labelledby`；option / X 按鈕補 `focus-visible:outline-brand` |
 | 0.6 | 2026-06-14 | 加 slide-in/out 動畫（sheet `translate-y-full ↔ translate-y-0`、backdrop `opacity 0 ↔ 100`、duration 300ms ease-out）；2-state pattern (`shouldRender` / `isVisible`) 配 rAF + setTimeout 達成「mount-then-animate-in」與「animate-out-then-unmount」；Esc / scroll lock 仍綁 `isOpen`（不綁 `shouldRender`）；補 `motion-reduce:transition-none` 安全網；補 3 個動畫測試 |
+| 0.7 | 2026-06-14 | 修 v0.6 slide-in 觀感 bug：React 19 把 `setShouldRender(true)` 與 rAF 內 `setIsVisible(true)` batch 成單 commit、首次 paint 在終態 → 看起來突然出現。改用純 CSS `@keyframes`（globals.css 加 4 個 keyframes + animate-\* token）配 `onAnimationEnd` 控 unmount；1 state 設計、不依賴 React 多 commit；motion-reduce 改 `animation-duration: 1ms` 確保 animationend 仍 fire；測試從 3 案例擴為 4 案例（涵蓋 animationName 精準比對 + 進場誤 unmount 防呆） |

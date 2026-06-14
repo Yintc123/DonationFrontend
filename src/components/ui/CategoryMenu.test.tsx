@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CategoryMenu } from './CategoryMenu'
 
@@ -181,7 +181,80 @@ describe('CategoryMenu', () => {
     expect(screen.getByRole('radiogroup')).toBeInTheDocument()
   })
 
-  it('動畫：sheet 套了 transition-transform、duration、motion-reduce 安全網', () => {
+  it('動畫：open 時 sheet 套 animate-slide-up-enter、backdrop 套 animate-fade-in-bg', () => {
+    render(
+      <CategoryMenu
+        isOpen={true}
+        selectedCategory={null}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    )
+    const dialog = screen.getByRole('dialog')
+    const section = dialog.querySelector('section')!
+    const backdrop = dialog.querySelector('button[aria-label="關閉選單"]')!
+    expect(section.className).toMatch(/animate-slide-up-enter/)
+    expect(backdrop.className).toMatch(/animate-fade-in-bg/)
+  })
+
+  it('動畫：close 後 sheet 切到 animate-slide-down-exit + backdrop 切到 fade-out，仍在 DOM', () => {
+    const { rerender } = render(
+      <CategoryMenu
+        isOpen={true}
+        selectedCategory={null}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    )
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    rerender(
+      <CategoryMenu
+        isOpen={false}
+        selectedCategory={null}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    )
+
+    // close 後仍在 DOM（exit keyframe 跑中）
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toBeInTheDocument()
+    const section = dialog.querySelector('section')!
+    const backdrop = dialog.querySelector('button[aria-label="關閉選單"]')!
+    expect(section.className).toMatch(/animate-slide-down-exit/)
+    expect(backdrop.className).toMatch(/animate-fade-out-bg/)
+  })
+
+  it('動畫：onAnimationEnd（slide-down-exit）→ unmount；其他 animationName 不 unmount', () => {
+    const { rerender } = render(
+      <CategoryMenu
+        isOpen={true}
+        selectedCategory={null}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    )
+    rerender(
+      <CategoryMenu
+        isOpen={false}
+        selectedCategory={null}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    )
+    const section = screen.getByRole('dialog').querySelector('section')!
+
+    // 假觸發其他 keyframe end → 不該 unmount
+    fireEvent.animationEnd(section, { animationName: 'fade-out-bg' })
+    expect(screen.queryByRole('dialog')).toBeInTheDocument()
+
+    // 觸發 slide-down-exit end → 才 unmount
+    fireEvent.animationEnd(section, { animationName: 'slide-down-exit' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('動畫：isOpen=true 時 onAnimationEnd（slide-up-enter）不會誤 unmount', () => {
     render(
       <CategoryMenu
         isOpen={true}
@@ -191,63 +264,7 @@ describe('CategoryMenu', () => {
       />,
     )
     const section = screen.getByRole('dialog').querySelector('section')!
-    expect(section.className).toMatch(/transition-transform/)
-    expect(section.className).toMatch(/duration-300/)
-    expect(section.className).toMatch(/motion-reduce:transition-none/)
-  })
-
-  it('動畫：mount 後 rAF 觸發、sheet 從 translate-y-full → translate-y-0', async () => {
-    render(
-      <CategoryMenu
-        isOpen={true}
-        selectedCategory={null}
-        onSelect={() => {}}
-        onClose={() => {}}
-      />,
-    )
-    const section = screen.getByRole('dialog').querySelector('section')!
-    // initial render 仍在 translate-y-full（rAF 還沒 fire）
-    expect(section.className).toMatch(/translate-y-full/)
-    // rAF 觸發後切到 translate-y-0
-    await waitFor(() => {
-      expect(section.className).toMatch(/translate-y-0/)
-    })
-  })
-
-  it('動畫：close 後 sheet 不立即 unmount，等動畫結束才 return null', async () => {
-    vi.useFakeTimers()
-    try {
-      const { rerender } = render(
-        <CategoryMenu
-          isOpen={true}
-          selectedCategory={null}
-          onSelect={() => {}}
-          onClose={() => {}}
-        />,
-      )
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
-
-      rerender(
-        <CategoryMenu
-          isOpen={false}
-          selectedCategory={null}
-          onSelect={() => {}}
-          onClose={() => {}}
-        />,
-      )
-
-      // close 後立刻仍在 DOM（動畫進行中）
-      expect(screen.queryByRole('dialog')).toBeInTheDocument()
-      const section = screen.getByRole('dialog').querySelector('section')!
-      expect(section.className).toMatch(/translate-y-full/)
-
-      // 推進 ANIM_MS 後 setTimeout 觸發 setShouldRender(false)，需 act flush
-      await act(async () => {
-        vi.advanceTimersByTime(350)
-      })
-      expect(screen.queryByRole('dialog')).toBeNull()
-    } finally {
-      vi.useRealTimers()
-    }
+    fireEvent.animationEnd(section, { animationName: 'slide-up-enter' })
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 })
