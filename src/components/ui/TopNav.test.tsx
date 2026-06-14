@@ -3,6 +3,11 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TopNav } from './TopNav'
 
+const routerBackMock = vi.fn()
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ back: routerBackMock }),
+}))
+
 describe('TopNav', () => {
   it('渲染 title 為 h1', () => {
     render(<TopNav title="所有捐款項目" />)
@@ -10,18 +15,20 @@ describe('TopNav', () => {
     expect(h1).toHaveTextContent('所有捐款項目')
   })
 
-  it('按返回按鈕觸發 onBack', async () => {
+  it('按返回按鈕觸發傳入的 onBack（非 router.back）', async () => {
+    routerBackMock.mockClear()
     const onBack = vi.fn()
     render(<TopNav title="所有捐款項目" onBack={onBack} />)
     await userEvent.click(screen.getByRole('button', { name: '返回' }))
     expect(onBack).toHaveBeenCalledTimes(1)
+    expect(routerBackMock).not.toHaveBeenCalled()
   })
 
-  it('未傳 onBack 時按返回不爆', async () => {
+  it('未傳 onBack 時按返回觸發 router.back() (預設 fallback)', async () => {
+    routerBackMock.mockClear()
     render(<TopNav title="所有捐款項目" />)
     await userEvent.click(screen.getByRole('button', { name: '返回' }))
-    // no assertion needed — just verifying no exception
-    expect(screen.getByRole('button', { name: '返回' })).toBeInTheDocument()
+    expect(routerBackMock).toHaveBeenCalledTimes(1)
   })
 
   it('accessory prop 渲染在右側', () => {

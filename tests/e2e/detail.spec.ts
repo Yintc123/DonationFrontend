@@ -42,6 +42,14 @@ test('直接訪問 sale item detail URL 顯示 TWD 價格 + 公益義賣 ribbon'
   await expect(page.getByRole('button', { name: '立即捐款' })).toBeVisible()
 })
 
+test('進詳情頁後按 TopNav 返回 → 回到 list 頁', async ({ page }) => {
+  await page.goto('/donation')
+  await page.getByRole('heading', { level: 2, name: 'ACC 中華耆幼關懷協會' }).click()
+  await expect(page).toHaveURL(new RegExp(`/charities/${CHARITY_ID}`))
+  await page.getByRole('button', { name: '返回' }).click()
+  await expect(page).toHaveURL(/\/donation$/)
+})
+
 test('detail page 未知 id → Next not-found', async ({ page }) => {
   const res = await page.goto(
     '/charities/00000000-0000-0000-0000-000000000000',

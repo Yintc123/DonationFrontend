@@ -1,18 +1,23 @@
+'use client'
 import type { ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 
 type TopNavProps = {
   title: string
+  /** 自訂返回行為；未傳則預設呼叫 router.back() */
   onBack?: () => void
   /** 右側 optional 附件（如詳情頁分享按鈕） */
   accessory?: ReactNode
 }
 
 export function TopNav({ title, onBack, accessory }: TopNavProps) {
+  const router = useRouter()
+  const handleBack = onBack ?? (() => router.back())
   return (
     <header className="flex items-center w-full h-11 bg-brand px-[14px]">
       <button
         type="button"
-        onClick={onBack}
+        onClick={handleBack}
         aria-label="返回"
         className="w-6 h-6 shrink-0 flex items-center justify-center
                    focus-visible:outline focus-visible:outline-2
