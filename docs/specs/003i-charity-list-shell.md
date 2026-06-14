@@ -1,6 +1,6 @@
 # Spec 003i：CharityListShell（feature）
 
-- **狀態**：Draft（v0.8 — search 模式 + 空 q 不渲染卡片，改顯示「請輸入關鍵字搜尋」EmptyState；對齊 iOS Mail / Apple HIG）
+- **狀態**：Draft（v0.9 — 加 §3.5 RWD container：`<main>` 包整個內容區 + 響應 max-w；引用 [003a §5 v0.4](./003a-design-system.md#5-rwdv04-3-tier)）
 - **路徑**：`src/components/features/CharityListShell.tsx`
 - **依賴**：
   - [003a Design System](./003a-design-system.md)
@@ -204,6 +204,32 @@ function SearchIconButton({ onClick }: { onClick: () => void }) {
 
 ---
 
+### 3.5 RWD container（v0.9 新增）
+
+整個內容區（chrome rows + list panels）包在響應式 `<main>` 容器內，按 [003a §5 v0.4](./003a-design-system.md#5-rwdv04-3-tier) 三 tier 縮放：
+
+```tsx
+<div className="min-h-dvh bg-surface-page flex flex-col">
+  <TopNav ... />  {/* full-width 紅底 */}
+  <main className="mx-auto w-full max-w-[480px] md:max-w-3xl lg:max-w-5xl
+                   flex-1 flex flex-col">
+    {chrome rows + ListPanels}
+  </main>
+  <CategoryMenu ... />  {/* fixed positioning，自己處理 RWD（003m §3）*/}
+  <BrandFooter />
+</div>
+```
+
+| 容器 | mobile | tablet | desktop |
+|---|---|---|---|
+| `<main>` max-w | 480 | 768 (3xl) | 1024 (5xl) |
+| 內層 padding | `px-[15px]` | `md:px-6` | `lg:px-8` |
+| `ListPanel` grid 切換 | 見 [003a §5.2](./003a-design-system.md#52-list-gridper-resource) per resource | 同左 | 同左 |
+
+CategoryMenu 不放在 `<main>` 內，渲染在頁面層級 — 因為 `fixed` positioning 不需要繼承容器 max-w；sheet 自己處理 `md+` 限寬置中（[003m §3](./003m-category-menu.md#3-anatomy)）。
+
+---
+
 ### 3.1 「三個 list 同時 mount」的取捨
 
 兩種選擇：
@@ -358,6 +384,7 @@ FilterButton label 更新為「動物保護 ▼」
 | 0.6 | 2026-06-14 | 新增 §10「上一頁狀態還原」設計：URL 持久化 tab/q/category + browser 自動 scroll restore；preview 階段以 `src/app/donation/PreviewShell.tsx` 暫代本元件，spec 002 §6 hooks 完成後改寫為本 spec 規格 |
 | 0.7 | 2026-06-14 | 加 browse vs search 兩模式 layout 對齊 Figma IMG_4875：(1) browse 模式 TabsRow 提到 FilterButton + 搜尋 icon 之上；(2) 點放大鏡 icon 進 search 模式 — FilterButton 完全消失、SearchBar 全寬 autoFocus 在 TabsRow 之上；(3) 取消按鈕回 browse + 清空 q；(4) `useState(initialQ.length > 0)` 讓 URL `?q=` 直接以 search 模式啟動；(5) 新 `<SearchIconButton>` 元件規格放 §3.4；(6) [003c v0.2](./003c-searchbar.md) SearchBar 加 `autoFocus` prop |
 | 0.8 | 2026-06-14 | (1) §3.4 Transition 表標注「進 search 模式後藍色取消按鈕**立即**出現」，對齊 [003c v0.3](./003c-searchbar.md#5-變體) 取消鈕顯示規則修正；(2) 新 §3.4「Search 模式 + 空 q 的 list 行為」— search 模式且 `q===''` 時 list 不渲染卡片、顯示 `<EmptyState title="請輸入關鍵字搜尋" />`，對齊 iOS Mail / Apple HIG search behavior；(3) `<ListPanel>` 多接 `isSearching` prop 控分支 |
+| 0.9 | 2026-06-14 | 新 §3.5 RWD container：chrome + list 包在響應式 `<main>` 內（mobile/tablet/desktop max-w = 480/768/1024）；CategoryMenu 留在頁面層級不受 main 容器限制（fixed positioning 自處理 [003m §3](./003m-category-menu.md#3-anatomy) 限寬置中）。對齊 [003a §5 v0.4 3-tier](./003a-design-system.md#5-rwdv04-3-tier) |
 
 ---
 

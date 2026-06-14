@@ -1,6 +1,6 @@
 # Spec 003m：CategoryMenu（bottom-sheet modal）
 
-- **狀態**：Draft（v0.7 — 動畫改 CSS keyframes 配 onAnimationEnd；解決 v0.6 React batching 導致 slide-in 看不到的問題）
+- **狀態**：Draft（v0.8 — sheet 加 RWD 限寬置中：`md+` 限寬 480 + horizontal centering wrapper；對齊 [003a §5.3](./003a-design-system.md#53-categorymenu-sheet)）
 - **路徑**：`src/components/ui/CategoryMenu.tsx`
 - **依賴**：
   - [003a Design System](./003a-design-system.md)
@@ -49,7 +49,8 @@ API 同 v0.3；視覺實作改變。
 | 元素 | 規格 |
 |---|---|
 | Backdrop | `fixed inset-0 bg-black/40 z-40`；open 套 `animate-fade-in-bg`、close 套 `animate-fade-out-bg`；點擊 → `onClose()` |
-| Sheet container | `fixed inset-x-0 bottom-0 z-50 bg-surface-card rounded-t-2xl shadow-2xl pb-[env(safe-area-inset-bottom)]`；open 套 `animate-slide-up-enter`、close 套 `animate-slide-down-exit`；綁 `onAnimationEnd` 偵測 `slide-down-exit` 結束才 unmount |
+| Sheet 外層 wrapper（v0.8 新增） | `fixed inset-x-0 bottom-0 z-50 flex justify-center pointer-events-none`；負責 horizontal centering（不影響 sheet 自己的 translateY 動畫 transform） |
+| Sheet container `<section>` | `pointer-events-auto w-full md:max-w-[480px] bg-surface-card rounded-t-2xl md:rounded-2xl md:mb-6 shadow-2xl pb-[env(safe-area-inset-bottom)]`；open 套 `animate-slide-up-enter`、close 套 `animate-slide-down-exit`；綁 `onAnimationEnd` 偵測 `slide-down-exit` 結束才 unmount |
 | Header | `relative flex items-center justify-center px-4 py-4 border-b border-line-soft` |
 | Header title | `text-base font-medium text-ink-AAA` 「選擇類別」 |
 | Close button (右上) | `absolute right-3 top-3 w-8 h-8 flex items-center justify-center text-ink-AA` + `focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand rounded`（icon `X`） |
@@ -299,3 +300,4 @@ export function CategoryMenu({
 | 0.5 | 2026-06-14 | token 收斂對齊 [003a v0.3](./003a-design-system.md#9-變更紀錄)：`border-gray-200` → `border-line`、`border-gray-100` → `border-line-soft`、`border-red-500` / `text-red-500` → `border-brand` / `text-brand`、`bg-white` → `bg-surface-card`；ARIA pair：與 [003k v0.4](./003k-filter-button.md#10-變更紀錄) `aria-haspopup="dialog"` 對齊；grid 外層補 `role="radiogroup" aria-labelledby`；option / X 按鈕補 `focus-visible:outline-brand` |
 | 0.6 | 2026-06-14 | 加 slide-in/out 動畫（sheet `translate-y-full ↔ translate-y-0`、backdrop `opacity 0 ↔ 100`、duration 300ms ease-out）；2-state pattern (`shouldRender` / `isVisible`) 配 rAF + setTimeout 達成「mount-then-animate-in」與「animate-out-then-unmount」；Esc / scroll lock 仍綁 `isOpen`（不綁 `shouldRender`）；補 `motion-reduce:transition-none` 安全網；補 3 個動畫測試 |
 | 0.7 | 2026-06-14 | 修 v0.6 slide-in 觀感 bug：React 19 把 `setShouldRender(true)` 與 rAF 內 `setIsVisible(true)` batch 成單 commit、首次 paint 在終態 → 看起來突然出現。改用純 CSS `@keyframes`（globals.css 加 4 個 keyframes + animate-\* token）配 `onAnimationEnd` 控 unmount；1 state 設計、不依賴 React 多 commit；motion-reduce 改 `animation-duration: 1ms` 確保 animationend 仍 fire；測試從 3 案例擴為 4 案例（涵蓋 animationName 精準比對 + 進場誤 unmount 防呆） |
+| 0.8 | 2026-06-14 | RWD 限寬：md+ sheet `max-w-[480px]` + horizontal centering、`md:rounded-2xl md:mb-6` 帶底距。新加 wrapper `<div fixed inset-x-0 bottom-0 flex justify-center pointer-events-none>` 處理 centering，sheet 仍綁 translateY 動畫 transform 不衝突。對齊 [003a §5.3](./003a-design-system.md#53-categorymenu-sheet) |

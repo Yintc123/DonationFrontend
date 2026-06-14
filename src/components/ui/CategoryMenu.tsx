@@ -84,16 +84,21 @@ export function CategoryMenu({
         className={`fixed inset-0 z-40 bg-black/40 cursor-default
                     ${isOpen ? 'animate-fade-in-bg' : 'animate-fade-out-bg'}`}
       />
-      <section
-        onAnimationEnd={handleSheetAnimationEnd}
-        className={`fixed inset-x-0 bottom-0 z-50 bg-surface-card rounded-t-2xl
-                    shadow-2xl pb-[env(safe-area-inset-bottom)]
-                    ${
-                      isOpen
-                        ? 'animate-slide-up-enter'
-                        : 'animate-slide-down-exit'
-                    }`}
-      >
+      {/* RWD：md+（≥768px）sheet 限寬 480 + 水平置中；md- 仍維持全寬底貼齊。
+          外層 flex wrapper 負責 horizontal centering，內層 <section> 維持自己
+          的 translateY 動畫，避免 transform 撞 translateX。 */}
+      <div className="fixed inset-x-0 bottom-0 z-50 flex justify-center pointer-events-none">
+        <section
+          onAnimationEnd={handleSheetAnimationEnd}
+          className={`pointer-events-auto w-full md:max-w-[480px] bg-surface-card rounded-t-2xl
+                      md:rounded-2xl md:mb-6
+                      shadow-2xl pb-[env(safe-area-inset-bottom)]
+                      ${
+                        isOpen
+                          ? 'animate-slide-up-enter'
+                          : 'animate-slide-down-exit'
+                      }`}
+        >
         <header className="relative flex items-center justify-center px-4 py-4 border-b border-line-soft">
           <h2
             id="category-sheet-title"
@@ -143,7 +148,8 @@ export function CategoryMenu({
             )
           })}
         </div>
-      </section>
+        </section>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 # Spec 003a：UI 設計系統 — Tokens / Assets / RWD
 
-- **狀態**：Draft（v0.3 — 對齊截圖補件 IMG_4875~4883 補 token）
+- **狀態**：Draft（v0.4 — §5 RWD 改 3-tier（mobile / tablet / desktop）含 container + list grid + CategoryMenu 限寬規則）
 - **建立日期**：2026-06-13（v0.1）/ 2026-06-14（v0.2 補 brand.soft + alert）/ 2026-06-14（v0.3 補 line / select / overlay token）
 - **影響範圍**：`tailwind.config.ts`、`src/app/globals.css`、`public/figma/*`
 - **依賴**：Figma file `0kx2Ne2rvndhfVr3uVUwad`（顏色 / 字級 source of truth）+ `docs/images/IMG_4875~4883`
@@ -98,19 +98,54 @@ fontFamily: {
 
 ---
 
-## 5. RWD
+## 5. RWD（v0.4 3-tier）
 
-設計基準 **375px**（iPhone X，Figma frame width）。
+設計基準 **375px**（iPhone X，Figma frame width）。tablet / desktop layout 無 Figma 設計稿，以「mobile-first 自然放大」原則自定 — 多欄 grid + container 限寬 + CategoryMenu 限寬置中，避免在大螢幕看起來像「中間一窄條」。
 
-| breakpoint | 行為 |
+### 5.1 Breakpoint 與 container
+
+採 Tailwind 標準 breakpoint，3 個分水嶺對應 3 種視覺：
+
+| Tier | Tailwind | Viewport | `<main>` container `max-w-*` | Page padding |
+|---|---|---|---|---|
+| **手機** | `< md` | < 768 | `max-w-[480px]`（手機與直握平板都用單欄置中） | `px-[15px]` |
+| **平板** | `md`〜`lg-1` | 768〜1023 | `md:max-w-3xl` (=768) | `md:px-6` |
+| **桌機** | `>= lg` | ≥ 1024 | `lg:max-w-5xl` (=1024) | `lg:px-8` |
+
+`<main>` 用 `mx-auto` 水平置中、 `flex-1 flex flex-col` 佔據可用高度（footer 黏底）。
+
+### 5.2 List grid（per resource）
+
+card layout 在 mobile 是 Figma 原貌；tablet / desktop 開多欄 grid，cards 自身 `w-full max-w-[345px] mx-auto`（[003e1/e2/e3](./003e-charity-card.md)）在任何欄寬下都自然填滿或置中。
+
+| resource | mobile (`<md`) | tablet (`md`) | desktop (`>=lg`) |
+|---|---|---|---|
+| `charity` | 1 欄 (`grid-cols-1`) | 2 欄 (`md:grid-cols-2`) | 3 欄 (`lg:grid-cols-3`) |
+| `donation` | 1 欄 | 2 欄 | 3 欄 |
+| `item` | 2 欄 (`grid-cols-2`) | 3 欄 (`md:grid-cols-3`) | 4 欄 (`lg:grid-cols-4`) |
+
+Gap：`gap-3 md:gap-4`（charity/donation）、`gap-2 md:gap-3 lg:gap-4`（item）。
+
+### 5.3 CategoryMenu sheet
+
+bottom-sheet 在桌面橫跨 1920px 視覺很糟。`< md` 仍貼齊左右邊（mobile UX）；`md+` 限寬 480 + 水平置中 + 加底距：
+
+| Tier | sheet layout |
 |---|---|
-| `< sm`（< 640） | 1 欄；卡片 `w-full max-w-[345px] mx-auto`；page padding `px-[15px]`（對齊 Figma list at x=15） |
-| `sm` ~ `md`（640~1024） | 1 欄；外層 container `max-w-[480px] mx-auto` 收斂（避免在大平板 / 小桌面被拉太寬） |
-| `md` 以上（>=1024） | 1 欄保持；不切多欄 grid |
+| `< md` | `w-full`、貼齊左右、`rounded-t-2xl` |
+| `md+` | `md:max-w-[480px]`、置中（外層 flex wrapper 處理 horizontal centering，避免撞 sheet 自己 translateY 動畫的 transform）、`md:rounded-2xl md:mb-6` |
 
-理由：Figma 無 desktop layout，強行多欄反而失原意。可接受桌面 viewer 看到「手機般置中窄欄」，貼合「手機版 Web」的視覺。
+實作細節見 [003m §3 CategoryMenu anatomy](./003m-category-menu.md#3-anatomy)。
 
-> 多欄 grid（≥md 改成 2~3 卡並排）是潛在 enhancement，需另開 spec 並補 Figma 桌面設計稿。
+### 5.4 Chrome rows（TabsRow / FilterRow / SearchBar row）
+
+- TopNav：full-width 紅底（保持 app chrome 感）
+- TabsRow / FilterRow / SearchBar row：在 `<main>` 容器內，自動繼承 container max-w + padding
+- 三模式 layout 規則由 [003i §3.4 兩模式 layout](./003i-charity-list-shell.md#34-browse-vs-search-兩模式-layoutv07-新增) 統管
+
+### 5.5 為什麼不做 sidebar / 三欄式 desktop layout
+
+桌機若改 sidebar + main 兩欄會背離 Figma「手機 Web」的 mental model；本作業 mobile-first，desktop 只擴內容寬度，**不**改 navigation pattern。未來若 backend 提供 PWA / 桌機版專屬功能（推薦欄、登入區）再考慮。
 
 ---
 
@@ -160,3 +195,4 @@ html, body {
 | 0.1 | 2026-06-13 | 初版（brand / ink / surface token、字級 mapping、3 assets） |
 | 0.2 | 2026-06-14 | 補 `brand.soft` / `alert.DEFAULT` 供 003e2 banner / 003e3 ribbon / 價格使用 |
 | 0.3 | 2026-06-14 | 截圖補件後修正：(a) 撤回 `brand.soft`（DonationProjectCard 是圖片底部紅色 overlay，非淺色 banner）；(b) 撤回 `alert.DEFAULT`（Figma 只用一種紅，ribbon / 價格 / CTA / 選中態統一 `brand.DEFAULT`）；(c) 新增 `brand.overlay`（圖片底部半透明紅）+ `line.DEFAULT` / `line.soft`（卡片 border、modal divider）；(d) 明確「禁 hex / 允許 black-opacity / 紅色統一 brand」三條規則 |
+| 0.4 | 2026-06-14 | §5 RWD 改 3-tier 含 (a) container 響應 max-w-[480px]/`md:max-w-3xl`/`lg:max-w-5xl`、(b) list grid charity/donation 1/2/3 欄、item 2/3/4 欄、(c) CategoryMenu sheet `md+` `max-w-[480px]` 置中、(d) §5.4 chrome 跟 container 響應、(e) §5.5 為何不做 sidebar |

@@ -68,68 +68,76 @@ export function PreviewShell({
   return (
     <div className="min-h-dvh bg-surface-page flex flex-col">
       <TopNav title="所有捐款項目" />
-      {/* spec 003i §3 兩模式 layout（對齊 Figma IMG_4875）：
-            browse — TabsRow ↑ / [FilterButton .. SearchIconButton] ↓
-            search — [SearchBar 全寬] ↑ / TabsRow ↓ / FilterButton 隱藏 */}
-      {isSearching ? (
-        <>
-          <div className="px-[15px] pt-[15px]">
-            <SearchBar
-              autoFocus
-              value={draft}
-              onChange={setDraft}
-              onCancel={() => {
-                setDraft('')
-                setIsSearching(false)
-              }}
-            />
-          </div>
-          <div className="mt-[6px]">
+      {/* spec 003a §5 RWD container：
+            < md  (手機) max-w-[480px]
+            md   (平板) max-w-3xl  (=768)
+            lg+  (桌機) max-w-5xl  (=1024) */}
+      <main className="mx-auto w-full max-w-[480px] md:max-w-3xl lg:max-w-5xl flex-1 flex flex-col">
+        {/* spec 003i §3 兩模式 layout（對齊 Figma IMG_4875）：
+              browse — TabsRow ↑ / [FilterButton .. SearchIconButton] ↓
+              search — [SearchBar 全寬] ↑ / TabsRow ↓ / FilterButton 隱藏 */}
+        {isSearching ? (
+          <>
+            <div className="px-[15px] md:px-6 lg:px-8 pt-[15px]">
+              <SearchBar
+                autoFocus
+                value={draft}
+                onChange={setDraft}
+                onCancel={() => {
+                  setDraft('')
+                  setIsSearching(false)
+                }}
+              />
+            </div>
+            <div className="mt-[6px]">
+              <TabsRow active={activeTab} onTabChange={setActiveTab} />
+            </div>
+          </>
+        ) : (
+          <>
             <TabsRow active={activeTab} onTabChange={setActiveTab} />
-          </div>
-        </>
-      ) : (
-        <>
-          <TabsRow active={activeTab} onTabChange={setActiveTab} />
-          <div className="px-[15px] pt-[15px] flex items-center gap-3">
-            <FilterButton
-              label={getCategoryLabel(selectedCategory)}
-              onClick={() => setMenuOpen((o) => !o)}
-              isOpen={isMenuOpen}
-            />
-            <SearchIconButton onClick={() => setIsSearching(true)} />
-          </div>
-        </>
-      )}
+            <div className="px-[15px] md:px-6 lg:px-8 pt-[15px] flex items-center gap-3">
+              <FilterButton
+                label={getCategoryLabel(selectedCategory)}
+                onClick={() => setMenuOpen((o) => !o)}
+                isOpen={isMenuOpen}
+              />
+              <SearchIconButton onClick={() => setIsSearching(true)} />
+            </div>
+          </>
+        )}
+        <div className="flex-1">
+          <ListPanel
+            resource="charity"
+            active={activeTab === 'charity'}
+            items={filteredCharities}
+            q={q}
+            isSearching={isSearching}
+          />
+          <ListPanel
+            resource="donation"
+            active={activeTab === 'donation'}
+            items={filteredDonations}
+            q={q}
+            isSearching={isSearching}
+          />
+          <ListPanel
+            resource="item"
+            active={activeTab === 'item'}
+            items={filteredItems}
+            q={q}
+            isSearching={isSearching}
+          />
+        </div>
+      </main>
+      {/* CategoryMenu 渲染在 main 之外、頁面層級（fixed positioning）；
+          sheet 內部處理 md+ 限寬置中（spec 003m §3）*/}
       <CategoryMenu
         isOpen={isMenuOpen}
         selectedCategory={selectedCategory}
         onSelect={setSelectedCategory}
         onClose={() => setMenuOpen(false)}
       />
-      <div className="flex-1">
-        <ListPanel
-          resource="charity"
-          active={activeTab === 'charity'}
-          items={filteredCharities}
-          q={q}
-          isSearching={isSearching}
-        />
-        <ListPanel
-          resource="donation"
-          active={activeTab === 'donation'}
-          items={filteredDonations}
-          q={q}
-          isSearching={isSearching}
-        />
-        <ListPanel
-          resource="item"
-          active={activeTab === 'item'}
-          items={filteredItems}
-          q={q}
-          isSearching={isSearching}
-        />
-      </div>
       <BrandFooter />
     </div>
   )
@@ -196,10 +204,13 @@ function ListPanel<T extends Charity | Donation | Item>({
     )
   }
 
+  // spec 003a §5 / 003j §4.1 RWD 欄數：
+  //   item:            mobile 2 / tablet 3 / desktop 4
+  //   charity/donation: mobile 1 / tablet 2 / desktop 3
   const listClass =
     resource === 'item'
-      ? 'grid grid-cols-2 gap-2 px-[15px] pt-[15px] pb-6'
-      : 'flex flex-col gap-3 px-[15px] pt-[15px] pb-6'
+      ? 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3 lg:gap-4 px-[15px] md:px-6 lg:px-8 pt-[15px] pb-6'
+      : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 px-[15px] md:px-6 lg:px-8 pt-[15px] pb-6'
 
   return (
     <div className={listClass}>
