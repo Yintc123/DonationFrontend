@@ -94,11 +94,12 @@ export type ListPage = z.infer<typeof ListPage>
 // from the real backend response trips a ContractViolationError at the
 // BFF before reaching the client.
 
-const InflatedCategory = z.object({
+export const InflatedCategory = z.object({
   id: z.string(),
   key: CategoryKeyEnum,
   displayName: z.string(),
 })
+export type InflatedCategory = z.infer<typeof InflatedCategory>
 
 export const BackendCharityListItem = z.object({
   id: z.string().uuid(),
