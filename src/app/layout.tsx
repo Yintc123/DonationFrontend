@@ -12,7 +12,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-Hant" className="h-full antialiased">
+    // suppressHydrationWarning: 瀏覽器擴充功能 / Chrome 自動翻譯常會在 React
+    // hydrate 前改 <html lang>，造成「server: zh-Hant / client: en」假警告。
+    // 此屬性僅壓制 <html> 一層的不匹配，不會掩蓋子節點真實 hydration bug。
+    // 參考：Next 16 docs 01-app/02-guides/preventing-flash-before-hydration.md
+    <html lang="zh-Hant" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-dvh flex flex-col bg-surface-page">{children}</body>
     </html>
   );
