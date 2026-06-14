@@ -15,7 +15,13 @@ const RawEnv = z
     SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 24 * 30),
     ALLOWED_ORIGINS: z.string().optional(),
 
-    REDIS_URL: z.string().url().optional(),
+    // Discrete connection parts — symmetric with backend's spec 001 §3.3
+    // pattern. ioredis accepts { host, port, password } directly so no URL
+    // string composition is needed; passwords with URL-unsafe characters
+    // (@ / : / ? / # etc.) don't need percent-encoding.
+    REDIS_HOST: z.string().min(1).optional(),
+    REDIS_PORT: z.coerce.number().int().positive().default(6379),
+    REDIS_PASSWORD: z.string().default(''),
     REDIS_KEY_PREFIX: z.string().default('jko-bff'),
     REDIS_TLS_ENABLED: z.enum(['0', '1']).default('0'),
     REDIS_CONNECT_TIMEOUT_MS: z.coerce.number().int().positive().default(2000),
@@ -36,10 +42,10 @@ const RawEnv = z
         })
       }
       // SESSION_SECRET is required unconditionally (schema-level) — see comment above.
-      if (!env.REDIS_URL) {
+      if (!env.REDIS_HOST) {
         ctx.addIssue({
           code: 'custom',
-          path: ['REDIS_URL'],
+          path: ['REDIS_HOST'],
           message: 'required when USE_MOCK=0',
         })
       }

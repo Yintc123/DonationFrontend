@@ -10,7 +10,9 @@ const TOUCH_LUA = `if redis.call('EXISTS', KEYS[1]) == 1 then return redis.call(
 const RELEASE_LOCK_LUA = `if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end`
 
 export type RedisSessionStoreOptions = {
-  url?: string
+  host?: string
+  port?: number
+  password?: string
   keyPrefix?: string
   tls?: boolean
   connectTimeout?: number
@@ -22,13 +24,20 @@ export class RedisSessionStore implements SessionStore {
   private readonly keyPrefix: string
 
   constructor(opts: RedisSessionStoreOptions = {}) {
-    const url = opts.url ?? env.REDIS_URL
-    if (!url) {
-      throw new Error('RedisSessionStore: REDIS_URL is required')
+    const host = opts.host ?? env.REDIS_HOST
+    if (!host) {
+      throw new Error('RedisSessionStore: REDIS_HOST is required')
     }
+    const port = opts.port ?? env.REDIS_PORT
+    const password = opts.password ?? env.REDIS_PASSWORD
     this.keyPrefix = opts.keyPrefix ?? env.REDIS_KEY_PREFIX
-    const useTls = opts.tls ?? (env.REDIS_TLS_ENABLED === '1' || url.startsWith('rediss://'))
-    this.redis = new Redis(url, {
+    const useTls = opts.tls ?? env.REDIS_TLS_ENABLED === '1'
+    // ioredis treats password: '' as "send AUTH with empty password" which a
+    // no-auth Redis rejects. Only include the field when the secret exists.
+    this.redis = new Redis({
+      host,
+      port,
+      ...(password ? { password } : {}),
       lazyConnect: false,
       maxRetriesPerRequest: 1,
       connectTimeout: opts.connectTimeout ?? env.REDIS_CONNECT_TIMEOUT_MS,

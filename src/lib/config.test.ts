@@ -8,7 +8,9 @@ const REAL_ENV = {
   SESSION_COOKIE_NAME: 'jko_session',
   SESSION_TTL_SECONDS: '2592000',
   ALLOWED_ORIGINS: 'http://localhost:3000',
-  REDIS_URL: 'redis://localhost:6379',
+  REDIS_HOST: 'localhost',
+  REDIS_PORT: '6379',
+  REDIS_PASSWORD: '',
   REDIS_KEY_PREFIX: 'jko-bff',
   REDIS_TLS_ENABLED: '0',
   REDIS_CONNECT_TIMEOUT_MS: '2000',
@@ -57,15 +59,15 @@ describe('config', () => {
     expect(env.REDIS_KEY_PREFIX).toBe('jko-bff')
   })
 
-  it('USE_MOCK=1 allows missing BACKEND_API_URL / REDIS_URL (but not SESSION_SECRET)', async () => {
+  it('USE_MOCK=1 allows missing BACKEND_API_URL / REDIS_HOST (but not SESSION_SECRET)', async () => {
     const { env } = await loadConfig({
       USE_MOCK: '1',
       BACKEND_API_URL: undefined,
-      REDIS_URL: undefined,
+      REDIS_HOST: undefined,
     })
     expect(env.USE_MOCK).toBe('1')
     expect(env.BACKEND_API_URL).toBeUndefined()
-    expect(env.REDIS_URL).toBeUndefined()
+    expect(env.REDIS_HOST).toBeUndefined()
     // SESSION_SECRET is unconditionally required — iron-session cookie path
     // runs in mock mode too. See config.ts comment.
     expect(env.SESSION_SECRET).toHaveLength(32)
@@ -86,10 +88,10 @@ describe('config', () => {
     ).rejects.toThrow(/SESSION_SECRET/)
   })
 
-  it('USE_MOCK=0 + missing REDIS_URL → throws', async () => {
+  it('USE_MOCK=0 + missing REDIS_HOST → throws', async () => {
     await expect(
-      loadConfig({ USE_MOCK: '0', REDIS_URL: undefined }),
-    ).rejects.toThrow(/REDIS_URL/)
+      loadConfig({ USE_MOCK: '0', REDIS_HOST: undefined }),
+    ).rejects.toThrow(/REDIS_HOST/)
   })
 
   it('production + empty ALLOWED_ORIGINS → throws', async () => {

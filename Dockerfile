@@ -43,7 +43,9 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 ENV USE_MOCK=0 \
     SESSION_SECRET=build-time-placeholder-secret-at-least-32-chars-long \
     BACKEND_API_URL=https://api.example.com \
-    REDIS_URL=redis://localhost:6379/0 \
+    REDIS_HOST=localhost \
+    REDIS_PORT=6379 \
+    REDIS_PASSWORD= \
     ALLOWED_ORIGINS=https://www.example.com \
     ENABLE_DEV_LOGIN=0
 

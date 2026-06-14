@@ -2,10 +2,12 @@ import { randomBytes } from 'node:crypto'
 import { runSessionStoreContract } from '../../../../tests/contracts/session-store.contract'
 import { RedisSessionStore } from './redis'
 
-const url = process.env.REDIS_URL ?? 'redis://localhost:6380/0'
+const host = process.env.REDIS_HOST ?? 'localhost'
+const port = Number(process.env.REDIS_PORT ?? 6380)
+const password = process.env.REDIS_PASSWORD ?? ''
 const prefix = `jko-test-${randomBytes(4).toString('hex')}`
 
 runSessionStoreContract(
   'redis',
-  () => new RedisSessionStore({ url, keyPrefix: prefix }),
+  () => new RedisSessionStore({ host, port, password, keyPrefix: prefix }),
 )
