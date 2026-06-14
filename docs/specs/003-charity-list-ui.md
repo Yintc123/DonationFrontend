@@ -38,6 +38,7 @@
 | [003k FilterButton](./003k-filter-button.md) | 灰底 pill「全部 ▼」filter trigger；點擊展開 CategoryMenu | 中 |
 | [003l BrandFooter](./003l-brand-footer.md) | 底部品牌標語「── 愛心沒有底線 ──」 | **高** |
 | [003m CategoryMenu](./003m-category-menu.md) | FilterButton 展開的 **bottom-sheet modal**（全部 + 16 categories，共 17 個 option）；backdrop click / Esc / X 關閉 | 中 |
+| [003n Spinner](./003n-spinner.md) | 純 CSS 旋轉圈圈 + label；search 模式 debounce 進行中、未來 TanStack Query isFetching 都可用 | **高** |
 
 ### 2.1 推薦實作順序
 

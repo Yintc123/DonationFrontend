@@ -1,6 +1,6 @@
 # Spec 003i：CharityListShell（feature）
 
-- **狀態**：Draft（v0.9 — 加 §3.5 RWD container：`<main>` 包整個內容區 + 響應 max-w；引用 [003a §5 v0.4](./003a-design-system.md#5-rwdv04-3-tier)）
+- **狀態**：Draft（v0.10 — search 模式 list 從 2 狀態擴為 3 狀態：debounce 進行中改用 [003n Spinner](./003n-spinner.md) 取代資料夾圖示）
 - **路徑**：`src/components/features/CharityListShell.tsx`
 - **依賴**：
   - [003a Design System](./003a-design-system.md)
@@ -161,20 +161,39 @@ export function CharityListShell({
 | 切 tab | 兩模式都允許切 tab（tab 在 search 模式仍可見、可點） |
 | 開 CategoryMenu | 僅 browse 模式可達（search 模式無 FilterButton） |
 
-#### Search 模式 + 空 q 的 list 行為（v0.8 新增）
+#### Search 模式的 list 三狀態（v0.10 改寫）
 
-進 search 模式但 `q === ''`（user 還沒打字）時，list 區域**不渲染卡片**，顯示 EmptyState「請輸入關鍵字搜尋」：
+`isSearching=true` 時 list 區域用以下三狀態決定畫面（按優先順序）：
+
+| 狀態 | 條件 | 渲染 |
+|---|---|---|
+| **debounce 進行中** | `isPending`（`draft.trim().toLowerCase() !== q` 且 `draft` 非空） | [`<Spinner label="搜尋中…" />`](./003n-spinner.md) |
+| **尚未輸入** | `!q && !isPending` | 純文字 `<p>請輸入關鍵字搜尋</p>`（**無**插畫、**無** spinner — 因為實際上沒在 load） |
+| **無結果** | `q && items.length === 0` | `<EmptyState illustration="empty-no-data.png" title="查無相關資料" subtitle="請調整關鍵字再重新搜尋" />`（資料夾圖示對「確認後無結果」語意合理） |
 
 ```tsx
-if (isSearching && !q) {
-  return <EmptyState illustration="/figma/empty-no-data.png" title="請輸入關鍵字搜尋" />
+const normalizedDraft = draft.trim().toLowerCase()
+const isPending = isSearching && normalizedDraft.length > 0 && normalizedDraft !== q
+
+if (isSearching) {
+  if (isPending) return <div className="flex justify-center mt-16"><Spinner label="搜尋中…" /></div>
+  if (!q)        return <p className="mt-16 text-center text-sm text-ink-A">請輸入關鍵字搜尋</p>
+  // q 有值且 items.length === 0 落到下面通用 EmptyState 分支
 }
+if (items.length === 0) return <EmptyState illustration="…" title="查無相關資料" subtitle="…" />
 ```
 
-為什麼不渲染原始列表：
-- iOS Mail / Messages 進 search 模式預設清空畫面、僅顯示 recent searches 或 suggestion；本作業沒有 recent searches，用 EmptyState 替代
-- user 已表態「我要搜尋」→ 繼續看完整列表反而干擾，預設「等你打字」更專注
-- 對齊 Apple HIG「Search behavior」：search 模式 = filter / focus 模式，非「同時瀏覽 + 搜尋」
+**為什麼 3 狀態而非 2**：
+- v0.8 把「尚未輸入」跟「pending」都塞同一個 folder + 「請輸入關鍵字搜尋」EmptyState，**folder 圖示對「正在 load」語意誤導** — user 會疑惑「我在 load 什麼？」
+- v0.10 拆開：spinner 用在真實 loading（debounce 中），純文字提示用在「等你輸入」，folder 留給「確認後無結果」
+
+對齊 iOS Mail / Apple HIG 的 search loading 視覺（spinner near search bar 表示「正在 search」）。
+
+**`isPending` 推導**：
+- `draft` = SearchBar 即時 value（每 keystroke 更新）
+- `q` = `useDebouncedValue(draft.trim().toLowerCase(), 300)`（300ms 後才同步）
+- 兩者差異 = 「user 已打字、debounce 還沒落地」= search-in-flight
+- `normalizedDraft.length > 0` guard：避免 user 全清空 input、`draft=''` `q='foo'` 短暫窗口誤觸 spinner
 
 #### 為什麼 SearchBar 不持有 isSearching state
 
@@ -385,6 +404,7 @@ FilterButton label 更新為「動物保護 ▼」
 | 0.7 | 2026-06-14 | 加 browse vs search 兩模式 layout 對齊 Figma IMG_4875：(1) browse 模式 TabsRow 提到 FilterButton + 搜尋 icon 之上；(2) 點放大鏡 icon 進 search 模式 — FilterButton 完全消失、SearchBar 全寬 autoFocus 在 TabsRow 之上；(3) 取消按鈕回 browse + 清空 q；(4) `useState(initialQ.length > 0)` 讓 URL `?q=` 直接以 search 模式啟動；(5) 新 `<SearchIconButton>` 元件規格放 §3.4；(6) [003c v0.2](./003c-searchbar.md) SearchBar 加 `autoFocus` prop |
 | 0.8 | 2026-06-14 | (1) §3.4 Transition 表標注「進 search 模式後藍色取消按鈕**立即**出現」，對齊 [003c v0.3](./003c-searchbar.md#5-變體) 取消鈕顯示規則修正；(2) 新 §3.4「Search 模式 + 空 q 的 list 行為」— search 模式且 `q===''` 時 list 不渲染卡片、顯示 `<EmptyState title="請輸入關鍵字搜尋" />`，對齊 iOS Mail / Apple HIG search behavior；(3) `<ListPanel>` 多接 `isSearching` prop 控分支 |
 | 0.9 | 2026-06-14 | 新 §3.5 RWD container：chrome + list 包在響應式 `<main>` 內（mobile/tablet/desktop max-w = 480/768/1024）；CategoryMenu 留在頁面層級不受 main 容器限制（fixed positioning 自處理 [003m §3](./003m-category-menu.md#3-anatomy) 限寬置中）。對齊 [003a §5 v0.4 3-tier](./003a-design-system.md#5-rwdv04-3-tier) |
+| 0.10 | 2026-06-14 | §3.4 「Search 模式 + 空 q 的 list 行為」改寫為 3 狀態：(1) debounce 進行中 → `<Spinner label="搜尋中…" />`（[003n 新規格](./003n-spinner.md)）；(2) 尚未輸入 → 純文字「請輸入關鍵字搜尋」（**移除 folder 圖示**，因為實際沒在 load 用 folder 語意誤導）；(3) 確認無結果 → 維持 folder「查無相關資料」。`<ListPanel>` 多接 `isPending` prop；`isPending = draft.trim().toLowerCase() !== q && draft.trim().length > 0` 在 Shell 計算 |
 
 ---
 

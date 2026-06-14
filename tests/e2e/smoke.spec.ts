@@ -87,19 +87,31 @@ test('進 search 模式：「取消」按鈕立即出現（即使還沒打字）
   await expect(page.getByRole('button', { name: '取消' })).toBeVisible()
 })
 
-test('search 模式 + 還沒打字 → 不渲染卡片，顯示「請輸入關鍵字搜尋」', async ({
+test('search 模式 + 還沒打字 → 純文字「請輸入關鍵字搜尋」（無 spinner、無 folder）', async ({
   page,
 }) => {
   await page.goto('/donation')
   await page.getByRole('button', { name: '開啟搜尋' }).click()
-  // EmptyState 提示出現
-  await expect(
-    page.getByRole('heading', { level: 2, name: '請輸入關鍵字搜尋' }),
-  ).toBeVisible()
-  // 卡片 heading 不應渲染（h2 只有 EmptyState 的 title）
+  // 純文字提示出現
+  await expect(page.getByText('請輸入關鍵字搜尋')).toBeVisible()
+  // 卡片 heading 不應渲染
   await expect(
     page.getByRole('heading', { level: 2, name: 'ACC 中華耆幼關懷協會' }),
   ).toHaveCount(0)
+  // 無 spinner、無 folder illustration
+  await expect(page.getByRole('status', { name: '搜尋中…' })).toHaveCount(0)
+})
+
+test('search 模式打字中 → Spinner「搜尋中…」（debounce 300ms 內）', async ({
+  page,
+}) => {
+  await page.goto('/donation')
+  await page.getByRole('button', { name: '開啟搜尋' }).click()
+  // 一打字、debounce 還沒到 → spinner role="status" 出現
+  await page.getByRole('searchbox').fill('魚油')
+  await expect(
+    page.getByRole('status', { name: '搜尋中…' }),
+  ).toBeVisible({ timeout: 200 })
 })
 
 test('search 模式打字後 → empty 提示消失，卡片或查無結果出現', async ({

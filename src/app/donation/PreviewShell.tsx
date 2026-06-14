@@ -10,6 +10,7 @@ import { CharityCard } from '@/components/ui/CharityCard'
 import { DonationProjectCard } from '@/components/ui/DonationProjectCard'
 import { SaleItemCard } from '@/components/ui/SaleItemCard'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Spinner } from '@/components/ui/Spinner'
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue'
 import { useUrlSync } from '@/lib/hooks/useUrlSync'
 import { getCategoryLabel, type CategoryKey } from '@/lib/schemas/categories'
@@ -54,6 +55,11 @@ export function PreviewShell({
   // URL ?q= 有值代表上一次正在搜尋；保留搜尋模式（iOS Mail / Apple HIG 慣例）
   const [isSearching, setIsSearching] = useState(initialQ.length > 0)
   const q = useDebouncedValue(draft.trim().toLowerCase(), 300)
+  // isPending：draft 已輸入內容、但 debounce 還沒同步到 q
+  //   → search-in-flight 狀態，<Spinner label="搜尋中…" /> 顯示
+  const normalizedDraft = draft.trim().toLowerCase()
+  const isPending =
+    isSearching && normalizedDraft.length > 0 && normalizedDraft !== q
 
   useUrlSync({
     q: q || undefined,
@@ -113,6 +119,7 @@ export function PreviewShell({
             items={filteredCharities}
             q={q}
             isSearching={isSearching}
+            isPending={isPending}
           />
           <ListPanel
             resource="donation"
@@ -120,6 +127,7 @@ export function PreviewShell({
             items={filteredDonations}
             q={q}
             isSearching={isSearching}
+            isPending={isPending}
           />
           <ListPanel
             resource="item"
@@ -127,6 +135,7 @@ export function PreviewShell({
             items={filteredItems}
             q={q}
             isSearching={isSearching}
+            isPending={isPending}
           />
         </div>
       </main>
@@ -175,23 +184,37 @@ function ListPanel<T extends Charity | Donation | Item>({
   items,
   q,
   isSearching,
+  isPending,
 }: {
   resource: ResourceKey
   active: boolean
   items: T[]
   q: string
   isSearching: boolean
+  isPending: boolean
 }) {
   if (!active) return <div hidden aria-hidden />
 
-  // search 模式 + 還沒打字：不渲染卡片，顯示提示（iOS Mail / Apple HIG 慣例）
-  if (isSearching && !q) {
-    return (
-      <EmptyState
-        illustration="/figma/empty-no-data.png"
-        title="請輸入關鍵字搜尋"
-      />
-    )
+  // search 模式的 3 狀態（spec 003i §3.4）：
+  //   isPending → <Spinner label="搜尋中…" />   debounce-in-flight，最積極
+  //   !q        → 純文字「請輸入關鍵字搜尋」      尚未輸入，無 loading 意涵
+  //   q + 0 筆 → folder「查無相關資料」          確認過、無結果
+  if (isSearching) {
+    if (isPending) {
+      return (
+        <div className="flex justify-center mt-16">
+          <Spinner label="搜尋中…" />
+        </div>
+      )
+    }
+    if (!q) {
+      return (
+        <p className="mt-16 text-center text-sm text-ink-A">
+          請輸入關鍵字搜尋
+        </p>
+      )
+    }
+    // q 有值且 items 0 → 落到下面 EmptyState「查無相關資料」
   }
 
   if (items.length === 0) {
