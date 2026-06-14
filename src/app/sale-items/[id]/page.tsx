@@ -2,41 +2,48 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { TopNav } from '@/components/ui/TopNav'
-import { CATEGORY_LABELS } from '@/lib/schemas/categories'
-import { findItemById } from '@/lib/mock/find-by-id'
+import { fetchItemDetail } from '@/lib/api/getDetail'
+import { NotFoundError } from '@/lib/errors/NotFoundError'
+import type { ItemDetail } from '@/lib/schemas/detail'
 
 type PageProps = { params: Promise<{ id: string }> }
 
 const priceFmt = new Intl.NumberFormat('zh-TW')
 
+async function safeFetch(id: string): Promise<ItemDetail | null> {
+  try {
+    return await fetchItemDetail(id)
+  } catch (e) {
+    if (e instanceof NotFoundError) return null
+    throw e
+  }
+}
+
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { id } = await params
-  const i = findItemById(id)
+  const i = await safeFetch(id)
   return {
     title: i ? `${i.name} | JKODonation` : '義賣商品 | JKODonation',
   }
 }
 
 /**
- * Spec 004c — 義賣商品介紹頁 preview
+ * Spec 004c — 義賣商品介紹頁
  *
- * 對齊 IMG_4883。Cover 上有「公益義賣 SHOP FOR CHANGE」絲帶
- * （詳情頁版本，比列表卡片的「公益標籤」緞帶完整）。
+ * RSC fetches backend via `fetchItemDetail`. Detail-only fields (content
+ * / approvalNos / nested charity) render conditionally.
  */
 export default async function Page({ params }: PageProps) {
   const { id } = await params
-  const item = findItemById(id)
+  const item = await safeFetch(id)
   if (!item) notFound()
 
   return (
     <div className="flex flex-col min-h-dvh bg-surface-page">
       <TopNav title="義賣商品" />
-      <CoverWithRibbon
-        coverImageUrl={item.coverImageUrl}
-        alt={item.name}
-      />
+      <CoverWithRibbon coverImageUrl={item.coverImageUrl} alt={item.name} />
       <div className="px-5 py-5 space-y-4 bg-surface-card">
         <div>
           <h1 className="text-base font-semibold text-ink-AAA leading-7">
@@ -46,22 +53,19 @@ export default async function Page({ params }: PageProps) {
             TWD {priceFmt.format(item.priceTwd)}
           </p>
         </div>
-        <ApprovalNoList />
-        <CharityChip
-          charityId={item.charityId}
-          charityName={item.charityName}
+        <ApprovalNoList
+          raisingApprovalNo={item.raisingApprovalNo}
+          reliefApprovalNo={item.reliefApprovalNo}
         />
-        {item.categories && item.categories.length > 0 && (
+        <CharityChip charity={item.charity} />
+        {item.categories.length > 0 && (
           <CategoryTags categories={item.categories} />
         )}
       </div>
       <section className="flex-1 px-5 py-6 bg-surface-page">
         <h2 className="text-base font-medium text-ink-AAA mb-3">商品說明</h2>
         <p className="text-sm leading-6 text-ink-AAA whitespace-pre-line">
-          {item.description}
-          {'\n\n'}
-          ※ 這是 preview placeholder。spec 002 §6 + spec 017 BFF 接上後，
-          這裡會顯示後端回傳的 `content` 長文。
+          {item.content || item.description}
         </p>
       </section>
       <DonateCta />
@@ -93,7 +97,7 @@ function CoverWithRibbon({
           <span className="text-sm">無商品圖片</span>
         </div>
       )}
-      {/* spec 004c：詳情頁絲帶為「公益義賣 SHOP FOR CHANGE」雙語版 */}
+      {/* spec 004c — detail ribbon (雙語版): */}
       <div className="absolute top-3 left-0 px-3 py-1 bg-brand text-white rounded-r-md shadow">
         <div className="text-sm font-semibold leading-tight">公益義賣</div>
         <div className="text-[10px] tracking-wider leading-tight">
@@ -104,27 +108,41 @@ function CoverWithRibbon({
   )
 }
 
-function ApprovalNoList() {
+function ApprovalNoList({
+  raisingApprovalNo,
+  reliefApprovalNo,
+}: {
+  raisingApprovalNo?: string
+  reliefApprovalNo?: string
+}) {
+  if (!raisingApprovalNo && !reliefApprovalNo) return null
   return (
     <dl className="grid grid-cols-[8em_1fr] gap-y-1 text-xs text-ink-A">
-      <dt>勸募立案核准字號</dt>
-      <dd>衛部救字第 1141364521 號</dd>
+      {raisingApprovalNo && (
+        <>
+          <dt>勸募立案核准字號</dt>
+          <dd>{raisingApprovalNo}</dd>
+        </>
+      )}
+      {reliefApprovalNo && (
+        <>
+          <dt>衛部救字號</dt>
+          <dd>{reliefApprovalNo}</dd>
+        </>
+      )}
     </dl>
   )
 }
 
 function CharityChip({
-  charityId,
-  charityName,
+  charity,
 }: {
-  charityId: string
-  charityName: string
+  charity: { id: string; name: string; logoUrl?: string }
 }) {
   return (
-    // replace（非 push）：spec 004 §「橫向關聯導航」— 詳情頁之間切換不堆疊
-    // history。從本頁按返回直接回 list，而不是回到「另一個詳情頁」。
+    // replace（非 push）：spec 004 §「橫向關聯導航」— 詳情頁之間切換不堆 history
     <Link
-      href={`/charities/${charityId}`}
+      href={`/charities/${charity.id}`}
       replace
       className="flex items-center justify-between gap-3 p-3 bg-black/5 rounded-xl
                  hover:bg-black/10
@@ -134,27 +152,40 @@ function CharityChip({
         <div
           aria-hidden
           className="w-10 h-10 rounded-md bg-brand/10 text-brand
-                     flex items-center justify-center text-sm font-medium shrink-0"
+                     flex items-center justify-center text-sm font-medium shrink-0 overflow-hidden"
         >
-          {charityName[0]}
+          {charity.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={charity.logoUrl}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            charity.name[0]
+          )}
         </div>
-        <div className="text-sm text-ink-AAA line-clamp-1">{charityName}</div>
+        <div className="text-sm text-ink-AAA line-clamp-1">{charity.name}</div>
       </div>
       <span className="text-sm text-ink-link shrink-0">查看團體 ›</span>
     </Link>
   )
 }
 
-function CategoryTags({ categories }: { categories: readonly string[] }) {
+function CategoryTags({
+  categories,
+}: {
+  categories: { id: string; displayName: string }[]
+}) {
   return (
     <ul className="flex flex-wrap gap-2">
-      {categories.map((key) => (
+      {categories.map((c) => (
         <li
-          key={key}
+          key={c.id}
           className="inline-flex items-center px-3 py-1 rounded-full
                      bg-black/5 text-xs leading-5 text-ink-AA"
         >
-          {CATEGORY_LABELS[key as keyof typeof CATEGORY_LABELS] ?? key}
+          {c.displayName}
         </li>
       ))}
     </ul>

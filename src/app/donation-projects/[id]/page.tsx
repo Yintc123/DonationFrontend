@@ -2,60 +2,64 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { TopNav } from '@/components/ui/TopNav'
-import { CATEGORY_LABELS } from '@/lib/schemas/categories'
-import { findDonationById } from '@/lib/mock/find-by-id'
+import { fetchDonationDetail } from '@/lib/api/getDetail'
+import { NotFoundError } from '@/lib/errors/NotFoundError'
+import type { DonationDetail } from '@/lib/schemas/detail'
 
 type PageProps = { params: Promise<{ id: string }> }
+
+async function safeFetch(id: string): Promise<DonationDetail | null> {
+  try {
+    return await fetchDonationDetail(id)
+  } catch (e) {
+    if (e instanceof NotFoundError) return null
+    throw e
+  }
+}
 
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { id } = await params
-  const d = findDonationById(id)
+  const d = await safeFetch(id)
   return {
     title: d ? `${d.name} | JKODonation` : '捐款專案介紹 | JKODonation',
   }
 }
 
 /**
- * Spec 004b — 捐款專案介紹頁 preview
+ * Spec 004b — 捐款專案介紹頁
  *
- * 對齊 IMG_4882。本 preview 用 list fixture (Donation) 顯示已有欄位；
- * raisingApprovalNo / reliefApprovalNo / content 等 detail-only 欄位
- * fixture 沒有，先用 placeholder。
+ * RSC fetches backend via `fetchDonationDetail`. Detail-only fields
+ * (content / approvalNos / nested charity) flow through the mapper —
+ * empty optional values arrive as undefined and render conditionally.
  */
 export default async function Page({ params }: PageProps) {
   const { id } = await params
-  const donation = findDonationById(id)
+  const donation = await safeFetch(id)
   if (!donation) notFound()
 
   return (
     <div className="flex flex-col min-h-dvh bg-surface-page">
       <TopNav title="捐款專案介紹" />
-      <Cover
-        coverImageUrl={donation.coverImageUrl}
-        alt={donation.name}
-      />
+      <Cover coverImageUrl={donation.coverImageUrl} alt={donation.name} />
       <div className="mx-3 -mt-4 bg-surface-card rounded-2xl shadow-sm relative z-10 p-5 space-y-4">
         <h1 className="text-base font-semibold text-ink-AAA leading-7">
           {donation.name}
         </h1>
-        <ApprovalNoList />
-        <CharityChip
-          charityId={donation.charityId}
-          charityName={donation.charityName}
+        <ApprovalNoList
+          raisingApprovalNo={donation.raisingApprovalNo}
+          reliefApprovalNo={donation.reliefApprovalNo}
         />
-        {donation.categories && donation.categories.length > 0 && (
+        <CharityChip charity={donation.charity} />
+        {donation.categories.length > 0 && (
           <CategoryTags categories={donation.categories} />
         )}
       </div>
       <section className="flex-1 px-5 py-6">
         <h2 className="text-base font-medium text-ink-AAA mb-3">專案內容</h2>
         <p className="text-sm leading-6 text-ink-AAA whitespace-pre-line">
-          {donation.description}
-          {'\n\n'}
-          ※ 這是 preview placeholder。spec 002 §6 + spec 017 BFF 接上後，
-          這裡會顯示後端回傳的 `content` 長文。
+          {donation.content || donation.description}
         </p>
       </section>
       <DonateCta />
@@ -84,28 +88,41 @@ function Cover({ coverImageUrl, alt }: { coverImageUrl?: string; alt: string }) 
   )
 }
 
-function ApprovalNoList() {
-  // Preview placeholder
+function ApprovalNoList({
+  raisingApprovalNo,
+  reliefApprovalNo,
+}: {
+  raisingApprovalNo?: string
+  reliefApprovalNo?: string
+}) {
+  if (!raisingApprovalNo && !reliefApprovalNo) return null
   return (
     <dl className="grid grid-cols-[8em_1fr] gap-y-1 text-xs text-ink-A">
-      <dt>勸募立案核准字號</dt>
-      <dd>衛部救字第 1151346163 號</dd>
+      {raisingApprovalNo && (
+        <>
+          <dt>勸募立案核准字號</dt>
+          <dd>{raisingApprovalNo}</dd>
+        </>
+      )}
+      {reliefApprovalNo && (
+        <>
+          <dt>衛部救字號</dt>
+          <dd>{reliefApprovalNo}</dd>
+        </>
+      )}
     </dl>
   )
 }
 
 function CharityChip({
-  charityId,
-  charityName,
+  charity,
 }: {
-  charityId: string
-  charityName: string
+  charity: { id: string; name: string; logoUrl?: string }
 }) {
   return (
-    // replace（非 push）：spec 004 §「橫向關聯導航」— 詳情頁之間切換不堆疊
-    // history。從本頁按返回直接回 list，而不是回到「另一個詳情頁」。
+    // replace（非 push）：spec 004 §「橫向關聯導航」— 詳情頁之間切換不堆 history
     <Link
-      href={`/charities/${charityId}`}
+      href={`/charities/${charity.id}`}
       replace
       className="flex items-center justify-between gap-3 p-3 bg-black/5 rounded-xl
                  hover:bg-black/10
@@ -115,27 +132,40 @@ function CharityChip({
         <div
           aria-hidden
           className="w-10 h-10 rounded-md bg-brand/10 text-brand
-                     flex items-center justify-center text-sm font-medium shrink-0"
+                     flex items-center justify-center text-sm font-medium shrink-0 overflow-hidden"
         >
-          {charityName[0]}
+          {charity.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={charity.logoUrl}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            charity.name[0]
+          )}
         </div>
-        <div className="text-sm text-ink-AAA line-clamp-1">{charityName}</div>
+        <div className="text-sm text-ink-AAA line-clamp-1">{charity.name}</div>
       </div>
       <span className="text-sm text-ink-link shrink-0">查看團體 ›</span>
     </Link>
   )
 }
 
-function CategoryTags({ categories }: { categories: readonly string[] }) {
+function CategoryTags({
+  categories,
+}: {
+  categories: { id: string; displayName: string }[]
+}) {
   return (
     <ul className="flex flex-wrap gap-2">
-      {categories.map((key) => (
+      {categories.map((c) => (
         <li
-          key={key}
+          key={c.id}
           className="inline-flex items-center px-3 py-1 rounded-full
                      bg-black/5 text-xs leading-5 text-ink-AA"
         >
-          {CATEGORY_LABELS[key as keyof typeof CATEGORY_LABELS] ?? key}
+          {c.displayName}
         </li>
       ))}
     </ul>

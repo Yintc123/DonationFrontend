@@ -2,32 +2,45 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { TopNav } from '@/components/ui/TopNav'
-import { CATEGORY_LABELS } from '@/lib/schemas/categories'
-import { findCharityById } from '@/lib/mock/find-by-id'
+import { fetchCharityDetail } from '@/lib/api/getDetail'
+import { NotFoundError } from '@/lib/errors/NotFoundError'
+import type { CharityDetail } from '@/lib/schemas/detail'
 import { getCharityInitial } from '@/components/ui/charity-initial'
 
 type PageProps = { params: Promise<{ id: string }> }
+
+async function safeFetch(id: string): Promise<CharityDetail | null> {
+  try {
+    return await fetchCharityDetail(id)
+  } catch (e) {
+    if (e instanceof NotFoundError) return null
+    throw e
+  }
+}
 
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { id } = await params
-  const c = findCharityById(id)
+  const c = await safeFetch(id)
   return {
     title: c ? `${c.name} | JKODonation` : '公益團體介紹 | JKODonation',
   }
 }
 
 /**
- * Spec 004a — 公益團體介紹頁 preview
+ * Spec 004a — 公益團體介紹頁
  *
- * 對齊 IMG_4881。本 preview 用 list fixture (Charity) 顯示已有欄位；
- * spec 004 §5 定義的 detail 欄位（聯絡電話 / 信箱 / 官方網站 / 核准字號）
- * fixture 沒有，先用 placeholder。spec 002 §6 + 017 BFF 接上後改 fetch。
+ * RSC fetches backend via `fetchCharityDetail` (spec 004 §3 — "RSC fetch
+ * backend"). 404 from upstream → `notFound()` → Next 404 page.
+ *
+ * Detail-only fields (contactPhone / contactEmail / officialWebsite /
+ * approvalNo) all render conditionally; backend optional values arrive as
+ * undefined here (mapper drops nulls).
  */
 export default async function Page({ params }: PageProps) {
   const { id } = await params
-  const charity = findCharityById(id)
+  const charity = await safeFetch(id)
   if (!charity) notFound()
 
   return (
@@ -35,14 +48,19 @@ export default async function Page({ params }: PageProps) {
       <TopNav title="公益團體介紹" />
       <Hero name={charity.name} logoUrl={charity.logoUrl} />
       <div className="-mt-6 mx-3 bg-surface-card rounded-2xl shadow-sm relative z-10 p-5 space-y-5">
-        <ContactInfo />
+        <ContactInfo
+          contactPhone={charity.contactPhone}
+          contactEmail={charity.contactEmail}
+          officialWebsite={charity.officialWebsite}
+          approvalNo={charity.approvalNo}
+        />
         <Description text={charity.description} />
-        {charity.categories && charity.categories.length > 0 && (
+        {charity.categories.length > 0 && (
           <CategoryTags categories={charity.categories} />
         )}
       </div>
       <div className="flex-1 px-5 py-6">
-        <RelatedSectionPlaceholder />
+        <RelatedSection charityId={charity.id} />
       </div>
       <DirectDonateCta />
     </div>
@@ -75,39 +93,69 @@ function Hero({ name, logoUrl }: { name: string; logoUrl?: string }) {
   )
 }
 
-function ContactInfo() {
-  // Preview placeholder：spec 004 §5 CharityDetail 欄位未在 fixture 內
+function ContactInfo({
+  contactPhone,
+  contactEmail,
+  officialWebsite,
+  approvalNo,
+}: {
+  contactPhone?: string
+  contactEmail?: string
+  officialWebsite?: string
+  approvalNo?: string
+}) {
+  // Suppress the whole section if backend returned nothing — avoids
+  // an empty "基本資料" header above zero rows.
+  if (!contactPhone && !contactEmail && !officialWebsite && !approvalNo) {
+    return null
+  }
   return (
     <section aria-labelledby="contact-info-h">
       <h2 id="contact-info-h" className="text-base font-medium text-ink-AAA mb-3">
         基本資料
       </h2>
       <dl className="grid grid-cols-[6em_1fr] gap-y-2 text-sm">
-        <dt className="text-ink-AA">聯絡電話</dt>
-        <dd>
-          <a className="text-ink-link" href="tel:0266040024">
-            02-66040024
-          </a>
-        </dd>
-        <dt className="text-ink-AA">聯絡信箱</dt>
-        <dd>
-          <a className="text-ink-link" href="mailto:contact@example.org">
-            contact@example.org
-          </a>
-        </dd>
-        <dt className="text-ink-AA">官方網站</dt>
-        <dd>
-          <a
-            className="text-ink-link break-all"
-            href="https://example.org"
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            https://example.org
-          </a>
-        </dd>
-        <dt className="text-ink-AA">核准字號</dt>
-        <dd className="text-ink-AAA">台內團字第 1110295700 號</dd>
+        {contactPhone && (
+          <>
+            <dt className="text-ink-AA">聯絡電話</dt>
+            <dd>
+              <a className="text-ink-link" href={`tel:${contactPhone}`}>
+                {contactPhone}
+              </a>
+            </dd>
+          </>
+        )}
+        {contactEmail && (
+          <>
+            <dt className="text-ink-AA">聯絡信箱</dt>
+            <dd>
+              <a className="text-ink-link" href={`mailto:${contactEmail}`}>
+                {contactEmail}
+              </a>
+            </dd>
+          </>
+        )}
+        {officialWebsite && (
+          <>
+            <dt className="text-ink-AA">官方網站</dt>
+            <dd>
+              <a
+                className="text-ink-link break-all"
+                href={officialWebsite}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                {officialWebsite}
+              </a>
+            </dd>
+          </>
+        )}
+        {approvalNo && (
+          <>
+            <dt className="text-ink-AA">核准字號</dt>
+            <dd className="text-ink-AAA">{approvalNo}</dd>
+          </>
+        )}
       </dl>
     </section>
   )
@@ -121,34 +169,38 @@ function Description({ text }: { text: string }) {
   )
 }
 
-function CategoryTags({ categories }: { categories: readonly string[] }) {
+function CategoryTags({
+  categories,
+}: {
+  categories: { id: string; displayName: string }[]
+}) {
   return (
     <ul className="flex flex-wrap gap-2">
-      {categories.map((key) => (
+      {categories.map((c) => (
         <li
-          key={key}
+          key={c.id}
           className="inline-flex items-center px-3 py-1 rounded-full
                      bg-black/5 text-xs leading-5 text-ink-AA"
         >
-          {CATEGORY_LABELS[key as keyof typeof CATEGORY_LABELS] ?? key}
+          {c.displayName}
         </li>
       ))}
     </ul>
   )
 }
 
-function RelatedSectionPlaceholder() {
+function RelatedSection({ charityId }: { charityId: string }) {
   return (
     <section>
       <h2 className="text-base font-medium text-ink-AAA mb-3">捐款專案</h2>
       <p className="text-sm text-ink-A">
-        spec 002 §6 + spec 017 BFF 完成後，這裡將列出此團體的進行中專案。
+        看此團體的進行中專案,或瀏覽全部捐款項目。
       </p>
       <Link
-        href="/donation?tab=donation"
+        href={`/donation?tab=donation&charityId=${charityId}`}
         className="inline-block mt-2 text-sm text-ink-link"
       >
-        先去看全部捐款專案 →
+        看此團體的捐款專案 →
       </Link>
     </section>
   )
