@@ -40,7 +40,7 @@ export async function generateMetadata({
  *  - 描述用 <ExpandableText>（line-clamp-3 + 更多）
  *  - 「直接捐款給團體」CTA 從 sticky 改為 in-card（Figma 設計如此）
  *  - 「捐款專案」從文字 + link 改成真實 <DonationProjectCard> 列表
- *  - TopNav 加 <ShareIconButton> accessory（UI only）
+ *  - TopNav 加 <ShareIconButton> accessory（v0.3 — Web Share API + clipboard fallback）
  */
 export default async function Page({ params }: PageProps) {
   const { id } = await params
@@ -49,7 +49,10 @@ export default async function Page({ params }: PageProps) {
 
   return (
     <div className="flex flex-col min-h-dvh bg-surface-page">
-      <TopNav title="公益團體介紹" accessory={<ShareIconButton />} />
+      <TopNav
+        title="公益團體介紹"
+        accessory={<ShareIconButton title={charity.name} />}
+      />
       <Hero name={charity.name} logoUrl={charity.logoUrl} />
       <div className="-mt-6 mx-3 bg-surface-card rounded-2xl shadow-sm relative z-10 p-5 space-y-5">
         <ContactInfo
