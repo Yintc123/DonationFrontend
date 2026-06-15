@@ -15,7 +15,7 @@
 import { useReducer, type Dispatch } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import type { CharityDetail, DonationDetail } from '@/lib/schemas/detail'
+import { clearDonationDraft, type DonationDraft } from './draft-store'
 
 // ─── BE-aligned types ──────────────────────────────────────────────
 
@@ -34,31 +34,42 @@ export const RECEIPT_OPTIONS: { value: ReceiptOption; label: string }[] = [
   { value: 'DEFER', label: '稍後決定' },
 ]
 
-export const DEFAULT_RECEIPT_OPTION: ReceiptOption = 'NONE'
+// v0.9 — no default. The dropdown opens in an explicit "unselected"
+// state (null) and the donor name input stays hidden until the user
+// picks something. Used to be DEFAULT_RECEIPT_OPTION = 'NONE'.
 
-export type DonationCheckoutQuery = {
-  targetType: 'CHARITY' | 'DONATION_PROJECT'
-  targetId: string
-  donationFrequency: 'ONE_TIME' | 'RECURRING'
-  billingDay?: 'DAY_6' | 'DAY_16' | 'DAY_26'
-  amountTwd: number
-}
+// v0.7 — DonationCheckoutQuery removed. The confirm page now reads its
+// inputs from the in-memory draft store (DonationDraft from ./draft-store),
+// not from URL query params. Refresh / direct-visit finds no draft and
+// bounces to /donation.
 
 // ─── Form state ────────────────────────────────────────────────────
 
 export interface FormState {
-  receiptOption: ReceiptOption
+  /**
+   * v0.9 — nullable. `null` = "尚未選擇" state; the donor-name input is
+   * hidden until the user picks something. Once picked, BE 022 requires
+   * `receiptOption` as required field, so isValid gates submit on
+   * non-null.
+   */
+  receiptOption: ReceiptOption | null
   donorName: string
+  // v0.8 — isAnonymous on all three order types (matches BE 022); checkbox
+  // surfaced on donation flow per user request after IMG_4890 precedent.
+  isAnonymous: boolean
 }
 
 export const DEFAULT_FORM: FormState = {
-  receiptOption: DEFAULT_RECEIPT_OPTION,
+  receiptOption: null,
   donorName: '',
+  isAnonymous: false,
 }
 
 export type Action =
-  | { type: 'SET_RECEIPT_OPTION'; value: ReceiptOption }
+  // v0.9 — value may be null when user reverts to the placeholder
+  | { type: 'SET_RECEIPT_OPTION'; value: ReceiptOption | null }
   | { type: 'SET_DONOR_NAME'; value: string }
+  | { type: 'SET_ANONYMOUS'; value: boolean }
 
 export function reducer(s: FormState, a: Action): FormState {
   switch (a.type) {
@@ -66,6 +77,8 @@ export function reducer(s: FormState, a: Action): FormState {
       return { ...s, receiptOption: a.value }
     case 'SET_DONOR_NAME':
       return { ...s, donorName: a.value }
+    case 'SET_ANONYMOUS':
+      return { ...s, isAnonymous: a.value }
   }
 }
 
@@ -74,7 +87,7 @@ export function reducer(s: FormState, a: Action): FormState {
 type CharityDonationPayload = {
   _endpoint: '/v1/donation/orders/charity-donation'
   donorName: string
-  isAnonymous: false
+  isAnonymous: boolean      // v0.8 — was literal false; now wired to form state
   receiptOption: ReceiptOption
   charityId: string
   donationFrequency: 'ONE_TIME' | 'RECURRING'
@@ -85,7 +98,7 @@ type CharityDonationPayload = {
 type ProjectDonationPayload = {
   _endpoint: '/v1/donation/orders/project-donation'
   donorName: string
-  isAnonymous: false
+  isAnonymous: boolean      // v0.8 — see CharityDonationPayload
   receiptOption: ReceiptOption
   donationProjectId: string
   donationFrequency: 'ONE_TIME' | 'RECURRING'
@@ -96,37 +109,38 @@ type ProjectDonationPayload = {
 export type DonationConfirmPayload = CharityDonationPayload | ProjectDonationPayload
 
 export function buildPayload(
-  query: DonationCheckoutQuery,
-  _target: CharityDetail | DonationDetail,
+  draft: DonationDraft,
   form: FormState,
 ): DonationConfirmPayload {
   const base = {
     donorName: form.donorName.trim(),
-    isAnonymous: false as const,
-    receiptOption: form.receiptOption,
-    donationFrequency: query.donationFrequency,
-    ...(query.billingDay !== undefined && { billingDay: query.billingDay }),
-    amountTwd: query.amountTwd,
+    isAnonymous: form.isAnonymous,    // v0.8 — wired to checkbox
+    // v0.9 — non-null guarantee from isValid gate (handleSubmit early-returns
+    // when receiptOption is null). Asserted here so TS sees the narrowed type
+    // for the BE-bound payload.
+    receiptOption: form.receiptOption as ReceiptOption,
+    donationFrequency: draft.donationFrequency,
+    ...(draft.billingDay !== undefined && { billingDay: draft.billingDay }),
+    amountTwd: draft.amountTwd,
   }
-  if (query.targetType === 'CHARITY') {
+  if (draft.target.type === 'CHARITY') {
     return {
       _endpoint: '/v1/donation/orders/charity-donation',
       ...base,
-      charityId: query.targetId,
+      charityId: draft.target.detail.id,
     }
   }
   return {
     _endpoint: '/v1/donation/orders/project-donation',
     ...base,
-    donationProjectId: query.targetId,
+    donationProjectId: draft.target.detail.id,
   }
 }
 
 // ─── Hook ──────────────────────────────────────────────────────────
 
 export type UseDonorInfoFormOpts = {
-  query: DonationCheckoutQuery
-  target: CharityDetail | DonationDetail
+  draft: DonationDraft
 }
 
 export type UseDonorInfoFormReturn = {
@@ -141,13 +155,12 @@ const DONOR_NAME_MAX = 120 // matches BE 022 §4.1 donorName maxLength
 /**
  * Where to return the user after a successful submit. The CTA that opened
  * the flow always lived on the detail page of the target, so we navigate
- * back to that page on success — same trip both directions, regardless
- * of how the user landed on the confirm page (direct URL, refresh, etc.).
+ * back to that page on success.
  */
-function entryUrl(query: DonationCheckoutQuery): string {
-  return query.targetType === 'CHARITY'
-    ? `/charities/${query.targetId}`
-    : `/donation-projects/${query.targetId}`
+function entryUrl(draft: DonationDraft): string {
+  return draft.target.type === 'CHARITY'
+    ? `/charities/${draft.target.detail.id}`
+    : `/donation-projects/${draft.target.detail.id}`
 }
 
 export function useDonorInfoForm(
@@ -156,12 +169,16 @@ export function useDonorInfoForm(
   const router = useRouter()
   const [form, dispatch] = useReducer(reducer, DEFAULT_FORM)
   const trimmed = form.donorName.trim()
+  // v0.9 — receiptOption must be picked first (input is hidden until then,
+  // but gate the submit too for safety).
   const isValid =
-    trimmed.length > 0 && form.donorName.length <= DONOR_NAME_MAX
+    form.receiptOption !== null &&
+    trimmed.length > 0 &&
+    form.donorName.length <= DONOR_NAME_MAX
 
   const handleSubmit = async () => {
     if (!isValid) return
-    const payload = buildPayload(opts.query, opts.target, form)
+    const payload = buildPayload(opts.draft, form)
     try {
       const res = await fetch('/api/checkout/donation', {
         method: 'POST',
@@ -169,17 +186,16 @@ export function useDonorInfoForm(
         body: JSON.stringify(payload),
       })
       if (!res.ok) {
-        // BFF wraps BE errors in spec 005's RFC 7807-ish shape; details
-        // aren't shown to the user — toast 一致即可。
         toast.error('送出失敗，請稍後再試')
         return
       }
       toast.success('已送出（demo 不接金流）')
-      // router.replace (not push) — confirm 頁完成任務後不該留在 history，
-      // 否則使用者按返回會回到一個「已送出」的死頁面，甚至重複觸發 fetch。
-      router.replace(entryUrl(opts.query))
+      // v0.7 — clear the in-memory draft on success so a subsequent
+      // direct visit to /checkout/donation no longer finds it. Then
+      // replace (not push) back to the entry detail page.
+      clearDonationDraft()
+      router.replace(entryUrl(opts.draft))
     } catch {
-      // Network failure / abort — same UX as backend error.
       toast.error('送出失敗，請稍後再試')
     }
   }

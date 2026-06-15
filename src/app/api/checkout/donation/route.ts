@@ -33,7 +33,9 @@ const BILLING_DAY = z.enum(['DAY_6', 'DAY_16', 'DAY_26'])
 
 const BASE = {
   donorName: z.string().min(1).max(120),
-  isAnonymous: z.literal(false),
+  // v0.5 — isAnonymous accepted as boolean across all three order types
+  // (BE 022 §4.1 / §4.2 — donation flow gained the checkbox in 009a v0.8).
+  isAnonymous: z.boolean(),
   receiptOption: RECEIPT_OPTION,
   donationFrequency: DONATION_FREQUENCY,
   billingDay: BILLING_DAY.optional(),

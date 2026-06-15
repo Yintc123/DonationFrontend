@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { Item } from '@/lib/schemas/list'
+import type { ItemDetail } from '@/lib/schemas/detail'
 
 const routerPushMock = vi.fn()
 vi.mock('next/navigation', () => ({
@@ -12,11 +12,14 @@ vi.mock('next/navigation', () => ({
 
 import { PurchaseQtySheet } from './PurchaseQtySheet'
 
-const ITEM: Item = {
+const ITEM: ItemDetail = {
   id: '00000000-0000-4000-8000-000000000099',
   name: '陸仕私廚 藤椒牛肉麵',
   description: '760g 袋（冷凍）',
+  content: '',
   priceTwd: 449,
+  charity: { id: 'cha-1', name: '台灣紅絲帶基金會' },
+  categories: [],
 }
 
 beforeEach(() => {
@@ -69,10 +72,8 @@ describe('PurchaseQtySheet', () => {
     render(<PurchaseQtySheet open onClose={onClose} item={ITEM} />)
     await userEvent.click(screen.getByRole('button', { name: '增加數量' }))
     await userEvent.click(screen.getByRole('button', { name: '下一步' }))
-    expect(routerPushMock).toHaveBeenCalledTimes(1)
-    const url = routerPushMock.mock.calls[0][0] as string
-    expect(url).toContain(`saleItemId=${ITEM.id}`)
-    expect(url).toContain('quantity=2')
+    // v0.7 — sheet pushes bare path; payload lives in in-memory store
+    expect(routerPushMock).toHaveBeenCalledWith('/checkout/purchase')
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

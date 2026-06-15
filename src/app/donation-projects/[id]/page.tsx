@@ -72,7 +72,7 @@ export default async function Page({ params }: PageProps) {
       </section>
       <CtaIsland
         kind="donation"
-        target={{ type: 'DONATION_PROJECT', id: donation.id }}
+        target={{ type: 'DONATION_PROJECT', detail: donation }}
         label="立即捐款"
         sticky
       />

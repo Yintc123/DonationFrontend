@@ -5,17 +5,17 @@
 
 import { BottomSheet } from '@/components/ui/BottomSheet'
 import { QtyStepper } from '@/components/ui/QtyStepper'
+import type { ItemDetail } from '@/lib/schemas/detail'
 import {
   MAX_QUANTITY,
   MIN_QUANTITY,
   usePurchaseQtyForm,
-  type PurchaseItem,
 } from './usePurchaseQtyForm'
 
 type Props = {
   open: boolean
   onClose: () => void
-  item: PurchaseItem
+  item: ItemDetail
 }
 
 const priceFmt = new Intl.NumberFormat('zh-TW')
@@ -51,7 +51,7 @@ function ItemRow({
   setQuantity,
   subtotal,
 }: {
-  item: PurchaseItem
+  item: ItemDetail
   quantity: number
   setQuantity: (n: number) => void
   subtotal: number

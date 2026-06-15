@@ -13,7 +13,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { Item } from '@/lib/schemas/list'
+import type {
+  CharityDetail,
+  DonationDetail,
+  ItemDetail,
+} from '@/lib/schemas/detail'
 
 const routerPushMock = vi.fn()
 vi.mock('next/navigation', () => ({
@@ -23,11 +27,28 @@ vi.mock('next/navigation', () => ({
 import { CtaIsland } from './CtaIsland'
 
 const CHARITY_ID = '00000000-0000-4000-8000-000000000001'
-const ITEM: Item = {
+const CHARITY: CharityDetail = {
+  id: CHARITY_ID,
+  name: 'ACC',
+  description: 'desc',
+  categories: [],
+}
+const PROJECT: DonationDetail = {
+  id: '00000000-0000-4000-8000-000000000002',
+  name: 'P',
+  description: 'd',
+  content: '',
+  charity: { id: CHARITY_ID, name: 'ACC' },
+  categories: [],
+}
+const ITEM: ItemDetail = {
   id: '00000000-0000-4000-8000-000000000099',
   name: '陸仕私廚 藤椒牛肉麵',
   description: '760g 袋（冷凍）',
+  content: '',
   priceTwd: 449,
+  charity: { id: 'cha-1', name: '台灣紅絲帶基金會' },
+  categories: [],
 }
 
 beforeEach(() => {
@@ -39,7 +60,7 @@ describe('CtaIsland', () => {
     render(
       <CtaIsland
         kind="donation"
-        target={{ type: 'CHARITY', id: CHARITY_ID }}
+        target={{ type: 'CHARITY', detail: CHARITY }}
         label="直接捐款給團體"
       />,
     )
@@ -53,7 +74,7 @@ describe('CtaIsland', () => {
     render(
       <CtaIsland
         kind="donation"
-        target={{ type: 'CHARITY', id: CHARITY_ID }}
+        target={{ type: 'CHARITY', detail: CHARITY }}
         label="直接捐款給團體"
       />,
     )
@@ -77,7 +98,7 @@ describe('CtaIsland', () => {
     const { container } = render(
       <CtaIsland
         kind="donation"
-        target={{ type: 'CHARITY', id: CHARITY_ID }}
+        target={{ type: 'CHARITY', detail: CHARITY }}
         label="直接捐款給團體"
       />,
     )
@@ -89,7 +110,7 @@ describe('CtaIsland', () => {
     const { container } = render(
       <CtaIsland
         kind="donation"
-        target={{ type: 'DONATION_PROJECT', id: CHARITY_ID }}
+        target={{ type: 'DONATION_PROJECT', detail: PROJECT }}
         label="立即捐款"
         sticky
       />,
@@ -107,7 +128,7 @@ describe('CtaIsland', () => {
     render(
       <CtaIsland
         kind="donation"
-        target={{ type: 'CHARITY', id: CHARITY_ID }}
+        target={{ type: 'CHARITY', detail: CHARITY }}
         label="直接捐款給團體"
       />,
     )
@@ -133,9 +154,9 @@ describe('CtaIsland', () => {
     await userEvent.click(trigger)
     // PurchaseQty「下一步」永遠 enabled（quantity 預設 1）
     await userEvent.click(screen.getByRole('button', { name: '下一步' }))
-    expect(routerPushMock).toHaveBeenCalledTimes(1)
-    const url = routerPushMock.mock.calls[0][0] as string
-    expect(url).toContain(`saleItemId=${ITEM.id}`)
+    // v0.7 — sheet pushes bare path now; the saleItemId travels via
+    // in-memory draft store, not URL query.
+    expect(routerPushMock).toHaveBeenCalledWith('/checkout/purchase')
     expect(document.activeElement).toBe(trigger) // focus return
   })
 })

@@ -1,6 +1,6 @@
 # Spec 009a：`/checkout/donation` 捐款確認頁
 
-- **狀態**：Draft（v0.6 — 送出成功後 `router.replace` 導回 entry detail page）
+- **狀態**：Draft（v0.9 — 收據開立方式預設未選；姓名 input 在選擇前不渲染）
 - **路徑（規劃）**：
   - `src/app/checkout/donation/page.tsx`（RSC）
   - `src/app/checkout/donation/useDonorInfoForm.ts` + `.test.ts`（v0.2 — pure logic hook）
@@ -226,7 +226,7 @@ function DonationDetailPanel({ query, target }: {
 │                                       │
 │  收據開立方式 *                       │
 │  ┌─────────────────────────────┐    │
-│  │ 都不需要              ▼      │    │  ← <select> dropdown
+│  │ 請選擇收據開立方式      ▼     │    │  ← <select> placeholder（v0.9 預設未選；選後才顯示姓名 input）
 │  └─────────────────────────────┘    │
 │                                       │
 │  捐款人姓名 *                         │
@@ -271,7 +271,10 @@ const RECEIPT_OPTIONS: { value: ReceiptOption; label: string }[] = [
   { value: 'DEFER', label: '稍後決定' },
 ]
 
-const DEFAULT_RECEIPT_OPTION: ReceiptOption = 'NONE'    // Figma 4888 預選
+// v0.9 — 不再 hardcode default：FormState.receiptOption 預設 null（未選），
+// <select> 顯示 placeholder「請選擇收據開立方式」。捐款人姓名 input + 匿名
+// checkbox 在 `receiptOption !== null` 時才條件渲染（避免使用者直接填姓名
+// 卻沒選收據方式造成 mismatch UX；同時 isValid 也 gate 此條件）。
 ```
 
 > Figma 4888 只展示 default `都不需要`、沒拉開 dropdown。v0.4 預設提供完整 5 個 option 字串、label 採直翻；未來 design / PM 補完 Figma 後對齊。「個人 / 公司」選後是否要展開統編 / 抬頭 / 地址，仍列為 [009 §6 開放問題](./009-checkout-confirm.md#6-開放問題跨-spec)。
@@ -284,12 +287,12 @@ const DEFAULT_RECEIPT_OPTION: ReceiptOption = 'NONE'    // Figma 4888 預選
 
 ```ts
 interface FormState {
-  receiptOption: ReceiptOption     // v0.4 — 命名對齊 BE Prisma enum
+  receiptOption: ReceiptOption | null  // v0.9 — null = 未選；姓名 input 條件渲染
   donorName: string                // 受控原始字串；validation 在 submit 算
 }
 
 const DEFAULT_FORM: FormState = {
-  receiptOption: DEFAULT_RECEIPT_OPTION,
+  receiptOption: null,                  // v0.9 — 未選
   donorName: '',
 }
 
@@ -310,7 +313,11 @@ function reducer(s: FormState, a: Action): FormState {
 ### 5.5 Validation
 
 ```ts
-const isValid = form.donorName.trim().length > 0 && form.donorName.length <= 120
+// v0.9 — 收據未選也算 invalid（雖然 UI 已隱藏姓名 input；雙重保險）
+const isValid =
+  form.receiptOption !== null &&
+  form.donorName.trim().length > 0 &&
+  form.donorName.length <= 120
 ```
 
 `receiptOption` 永遠有 default、不會 invalid。對齊 BE 022 §4.1 `donorName: { minLength: 1, maxLength: 120 }`。
@@ -342,7 +349,11 @@ export function useDonorInfoForm(
 ): UseDonorInfoFormReturn {
   const [form, dispatch] = useReducer(reducer, DEFAULT_FORM)
   const trimmedName = form.donorName.trim()
-  const isValid = trimmedName.length > 0 && form.donorName.length <= 120
+  // v0.9 — 收據選了才算 valid
+  const isValid =
+    form.receiptOption !== null &&
+    trimmedName.length > 0 &&
+    form.donorName.length <= 120
 
   const handleSubmit = async () => {     // v0.5 — async：要 await fetch
     if (!isValid) return
@@ -563,7 +574,7 @@ E2E 後續可加，本 v0.1 不強制。
 
 - **收據選項展開欄位**：個人選後是否要填統編 / 抬頭 / 地址？公司同理？等設計確認；BE 022 §11 OQ 也未決
 - **截圖未顯示完整 form 欄位**：4888 拉到底可能還有電話 / email / 地址；BE 022 body 目前不含這些欄位，FE 不擴
-- **`isAnonymous` UI 缺口**：BE 三類訂單共用 `isAnonymous`，但 Figma 4888 / 4889 沒匿名 checkbox（只 IMG_4890 sale-item 有）；FE 固定送 `false`、不影響 BE optional default。未來 design 補匿名 UI 時拉到捐款流程，移除 hardcoded `false`
+- ~~**`isAnonymous` UI 缺口**：BE 三類訂單共用 `isAnonymous`，但 Figma 4888 / 4889 沒匿名 checkbox（只 IMG_4890 sale-item 有）；FE 固定送 `false`、不影響 BE optional default。未來 design 補匿名 UI 時拉到捐款流程，移除 hardcoded `false`~~ → ✅ v0.8 解決：「我要匿名捐款」checkbox 加進 Panel 2 「捐款人基本資料」（姓名 input 下方）；對齊 IMG_4890 同樣文案、視覺；FormState 加 `isAnonymous` + `SET_ANONYMOUS` Action + reducer case；buildPayload 改吃 `form.isAnonymous`；payload 型別從 `false` literal 改 `boolean`。此舉跨 charity / project / sale-item 三類確認頁統一
 - **`note` 欄位**：BE 022 body 含 `note?` (0-500 字)，FE Figma 無 UI；FE 不送，BE optional 接受
 - **client-side 算下次扣款日期**：v0.4 已對齊 BE UTC + 嚴格 `<` 規則；prod 改用 BE response `nextChargeAt` 為準
 - **i18n disclaimer**：街口金融科技字串 hardcode 中文；i18n 上線後抽 string table
@@ -580,3 +591,6 @@ E2E 後續可加，本 v0.1 不強制。
 | 0.4 | 2026-06-15 | **query / form / payload 全面對齊 [backend 022](../../../backend/docs/specs/022-donation-order-api.md)**（Option C）：(a) §2 Zod query 用 BE enum 值（`CHARITY`/`DONATION_PROJECT`、`ONE_TIME`/`RECURRING`、`DAY_6/16/26`、`amountTwd` 1-1_000_000）+ ONE_TIME/RECURRING ↔ billingDay 雙 refine；(b) §4.2 `computeNextChargeDate` → `computeNextChargeAt`，規約對齊 BE 021 §7.7（UTC + 嚴格 `<`），解 client/server 錯位每月 3 天的 bug；(c) §4.3 渲染 reference 全用 BE 命名；(d) §5.2 `RECEIPT_TYPES` 中文 3 值 → `RECEIPT_OPTIONS` 對齊 BE `ReceiptOption` 完整 5 值（NONE/INDIVIDUAL/CORPORATE/GOVERNMENT_DONATION/DEFER）+ value/label 分離；(e) §5.3 donorName `maxLength={120}` 對齊 BE；(f) §5.4 FormState `receiptType` → `receiptOption`、Action 同步 rename；(g) §5.5 isValid 加 120 字上限；(h) §6.1 payload shape 完全對齊 BE 022 §4.1/§4.2 body（discriminated union `_endpoint` + `charityId` vs `donationProjectId` + `isAnonymous=false` hardcode）；(i) §8 test cases 升級 R1/H1~H8/component 4/page 6 個；(j) §9 OQ 補 `isAnonymous` UI 缺口 + `note` 欄位差 + receiptOption 5 值 sync |
 | 0.5 | 2026-06-15 | **handleSubmit 改 fetch BFF**：替換 v0.4 的 `console.log + toast.success` 為 `await fetch('/api/checkout/donation', { method: 'POST', body: payload })`；2xx → toast.success；非 2xx 或 throw → `toast.error('送出失敗，請稍後再試')`。`useDonorInfoForm` 變 async。Test 升級：H5 改驗 fetch 被呼叫 + body 形狀；新增 H9 (BFF 5xx)、H10 (network throw) 兩個錯誤路徑；component test 5 同樣驗 fetch call。對應 [spec 009 §5 BFF route](./009-checkout-confirm.md#5-bff-route-handlerv04-新)（`/api/checkout/donation`）與 [spec 022 §4.1/4.2](../../../backend/docs/specs/022-donation-order-api.md)。本期不打 mock-confirm-payment（留給未來付款頁），brief.md「不接金流」靠「BE 建單只到 PENDING」達成 |
 | 0.6 | 2026-06-15 | **送出成功 → 導回 entry detail page**：useDonorInfoForm 加 `useRouter()`；handleSubmit 成功路徑加 `router.replace(entryUrl(query))`，依 targetType 計算：CHARITY → `/charities/${targetId}`、DONATION_PROJECT → `/donation-projects/${targetId}`。**用 replace 而非 push**：confirm 頁完成任務後不該留 history（避免「按返回又看到已送出頁 / 又能再點送出」）。失敗時不導頁，留在 confirm 頁顯示 toast.error 讓使用者重試。Test 升級：H5 / H6 加 `routerReplaceMock` 斷言；H9 / H10 加「失敗不導頁」反向斷言 |
+| 0.7 | 2026-06-15 | **URL query → in-memory draft store**（隱私 / 統一處理 refresh）：見 [009 §2 / §2.1](./009-checkout-confirm.md#2-routingv05--bare-path--in-memory-draft-store) 完整改寫說明。本 spec 對應更新：(a) §2 RSC 不再 Zod 解析 query — page.tsx 變 RSC shell + `DonationConfirmPageEntry`（client）peek `donation/draft-store.ts`；(b) `DonationCheckoutQuery` 型別與相關 const 移除；(c) `buildPayload` / `useDonorInfoForm` opts 從 `{query, target}` 收成 `{draft: DonationDraft}`，draft 自帶 `target.detail.id` 取代 `targetId`；(d) `DonationConfirmPage` props 從 `{query, target}` 收成 `{draft}`，內部讀 draft.donationFrequency / billingDay / amountTwd / target.detail.name 等。(e) CtaIsland donation 變數 `target: { type, detail: CharityDetail \| DonationDetail }`，sheet 寫 draft 時把整 detail 帶進去。(f) submit 成功 `clearDonationDraft()` 再 `router.replace(entryUrl)`。所有 hook / component / page tests 同步重寫（renderHook 餵 `{ draft: ... }` 不再 `{ query, target }`）|
+| 0.8 | 2026-06-15 | **補「我要匿名捐款」checkbox 到 donation flow**：原本只 009b sale-item 有，依使用者要求 charity / project 捐款頁也補上（對齊 BE 022 isAnonymous 跨三類訂單）。FormState 加 `isAnonymous: boolean`、Action 加 `SET_ANONYMOUS`、reducer 加對等映射；DEFAULT_FORM.isAnonymous=false；buildPayload 從 `form.isAnonymous` 讀；payload 型別 `isAnonymous: false` literal 改 `boolean`。`<DonorInfoFormPanel>` 在姓名 input 下方加 checkbox（樣式同 [009b §6.4](./009b-purchase-confirm.md)）。Test 新增：R4/R5 reducer pure、H11 hook（勾匿名 + submit → payload.isAnonymous=true）、component 5b/5c。§9 OQ 「isAnonymous UI 缺口」標為 ✅ 已解 |
+| 0.9 | 2026-06-15 | **收據開立方式預設未選 → 姓名 input 條件渲染**：FormState `receiptOption` 從 `ReceiptOption` 改為 `ReceiptOption \| null`，DEFAULT_FORM 改 `null`；`DEFAULT_RECEIPT_OPTION` const 移除。Action `SET_RECEIPT_OPTION` value 也允許 null（使用者反悔選 placeholder）。`<select>` 新增 placeholder option（value=""、disabled、「請選擇收據開立方式」）；當 state 是 null 時 select 顯示 placeholder。**捐款人姓名 input + 匿名 checkbox 整段在 `receiptOption !== null` 時才條件渲染**（避免姓名先填、收據未選的 mismatch UX）。`isValid` + `buildPayload` 都加上「receiptOption !== null」gate；buildPayload 在斷言點做 type narrow。Test 升級：R6/R7 reducer pure、H1/H2 預期改、H2b/H3/H4/H5/H6/H8/H9/H10/H11 都先 dispatch SET_RECEIPT_OPTION；component test 4/4b/5/5b/5c/6 改成「先 selectOption 再 type」的流程；test 6 斷言 `<select>` 共 6 個 options（5 BE enum + 1 placeholder） |

@@ -13,26 +13,23 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import type { ItemDetail } from '@/lib/schemas/detail'
+import { setPurchaseDraft } from './purchase/draft-store'
 
 export const DEFAULT_QUANTITY = 1
 export const MIN_QUANTITY = 1
 export const MAX_QUANTITY = 100
 
 /**
- * Minimal sale-item shape this flow needs. Intentionally narrower than
- * `Item` (list schema) / `ItemDetail` so both can satisfy it: list pages
- * call through with the flat shape, detail page passes the nested-charity
- * shape — purchase only reads id / name / priceTwd from either.
+ * v0.7 — was a narrow `{ id, name, priceTwd }` shape so list-page Item and
+ * detail-page ItemDetail could both satisfy it. Now the confirm page reads
+ * the full ItemDetail from the in-memory draft (商品名 / 主辦團體名 / cover
+ * 圖等都用得到), so we lift the requirement up. Only the sale-item detail
+ * page invokes this flow anyway, and it already has the full ItemDetail.
  */
-export type PurchaseItem = {
-  id: string
-  name: string
-  priceTwd: number
-}
-
 export type UsePurchaseQtyFormOpts = {
   open: boolean
-  item: PurchaseItem
+  item: ItemDetail
   onClose: () => void
 }
 
@@ -64,11 +61,10 @@ export function usePurchaseQtyForm(
   const total = subtotal + shipping
 
   const handleSubmit = () => {
-    const params = new URLSearchParams({
-      saleItemId: opts.item.id,
-      quantity: String(quantity),
-    })
-    router.push(`/checkout/purchase?${params.toString()}`)
+    // v0.7 — stash the draft in memory instead of the URL; confirm page
+    // peeks on mount and redirects to /donation if the slot is empty.
+    setPurchaseDraft({ quantity, item: opts.item })
+    router.push('/checkout/purchase')
     opts.onClose()
   }
 

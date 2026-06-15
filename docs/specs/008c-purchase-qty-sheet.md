@@ -1,6 +1,6 @@
 # Spec 008c：`<PurchaseQtySheet>` 購買數量 sheet
 
-- **狀態**：Draft（v0.5 — 命名 / payload 全面對齊 backend spec 021 / 022；MAX_QTY 改 100）
+- **狀態**：Draft（v0.6 — sheet 寫 [purchase/draft-store](../../src/app/checkout/purchase/draft-store.ts) + bare path push；item 收 ItemDetail（不再 PurchaseItem narrow）；[009 v0.5](./009-checkout-confirm.md#2-routingv05--bare-path--in-memory-draft-store) 配套）
 - **路徑（規劃）**：
   - `src/app/checkout/usePurchaseQtyForm.ts` + `.test.ts`（v0.4 — pure logic hook）
   - `src/app/checkout/PurchaseQtySheet.tsx` + `.test.tsx`（v0.4 起為純 UI）
@@ -381,3 +381,4 @@ onClose()
 | 0.3 | 2026-06-15 | submit handler 從 `console.log` 改為 `router.push('/checkout/purchase?...')`，串接 [009b confirm 頁](./009b-purchase-confirm.md) |
 | 0.4 | 2026-06-15 | **抽 `usePurchaseQtyForm` custom hook**：對齊 [008b v0.4](./008b-donation-settings-sheet.md) container / presentational 分層；component 變純 UI、hook 包 useState + useEffect reset + 算 subtotal/total + handleSubmit + router.push。新增 4 個 hook H1~H4 integration test、component test 縮減為 4 個視覺整合 |
 | 0.5 | 2026-06-15 | **命名 / payload 全面對齊 backend spec 022**（Option C）：(a) `qty` → `quantity`（對齊 BE 022 §4.3 `items[].quantity`）；(b) `itemId` → `saleItemId`（對齊 BE OrderLine.saleItemId）；(c) `MAX_QTY = 99` → `MAX_QUANTITY = 100`（對齊 BE 022 §4.3 quantity 上限）+ QtyStepper default max；(d) hook return field `qty / setQty` → `quantity / setQuantity`；(e) router.push query params 用 BE 命名 `?saleItemId=...&quantity=...`；(f) PurchaseQtyPayload field 命名跟著對齊；(g) 測試案例描述同步更新 |
+| 0.6 | 2026-06-16 | **sheet 寫 in-memory draft store 取代 URL query**（隨 [009 v0.5](./009-checkout-confirm.md#2-routingv05--bare-path--in-memory-draft-store) 改寫）：(a) `item` prop 從 narrow `PurchaseItem = { id, name, priceTwd }` 升回 `ItemDetail`（含 charity / categories / coverImageUrl 等），confirm 頁直接從 draft 讀整 detail；(b) `handleSubmit` 從 `router.push('/checkout/purchase?saleItemId=...&quantity=...')` 改為 `setPurchaseDraft({ quantity, item }) + router.push('/checkout/purchase')` bare path；(c) `buildPayload` 移除（confirm 頁的 `useReceiptInfoForm.buildPayload` 取代之，從 draft 讀）；(d) §3.4 hook reference 內的 URL params 程式片段已過期，請以 [實際 hook 程式碼](../../src/app/checkout/usePurchaseQtyForm.ts) 為準；(e) hook test H3 改為斷言 `setPurchaseDraft` spy + bare path push |

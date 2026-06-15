@@ -35,11 +35,11 @@ function mockFetchThrow() {
 }
 
 import type { ItemDetail } from '@/lib/schemas/detail'
+import type { PurchaseDraft } from './draft-store'
 import {
   DEFAULT_FORM,
   reducer,
   useReceiptInfoForm,
-  type PurchaseCheckoutQuery,
 } from './useReceiptInfoForm'
 
 const ITEM_ID = '00000000-0000-4000-8000-000000000099'
@@ -54,10 +54,8 @@ const ITEM: ItemDetail = {
   categories: [],
 }
 
-const VALID_QUERY: PurchaseCheckoutQuery = {
-  saleItemId: ITEM_ID,
-  quantity: 2,
-}
+// v0.7 — opts collapsed { query, item } → { draft }
+const VALID_DRAFT: PurchaseDraft = { quantity: 2, item: ITEM }
 
 beforeEach(() => {
   toastSuccessMock.mockReset()
@@ -95,7 +93,7 @@ describe('reducer (pure)', () => {
 describe('useReceiptInfoForm (hook)', () => {
   it('H1: 初始 isValid=false；subtotal=priceTwd×quantity；shipping=0；total=subtotal', () => {
     const { result } = renderHook(() =>
-      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+      useReceiptInfoForm({ draft: VALID_DRAFT }),
     )
     expect(result.current.form).toEqual(DEFAULT_FORM)
     expect(result.current.isValid).toBe(false)
@@ -106,7 +104,7 @@ describe('useReceiptInfoForm (hook)', () => {
 
   it('H2: SET_DONOR_NAME → isValid=true', () => {
     const { result } = renderHook(() =>
-      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+      useReceiptInfoForm({ draft: VALID_DRAFT }),
     )
     act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'Alice' }))
     expect(result.current.isValid).toBe(true)
@@ -114,7 +112,7 @@ describe('useReceiptInfoForm (hook)', () => {
 
   it('H3: SET_ANONYMOUS true → state.isAnonymous=true、isValid 不變（v0.1 規則）', () => {
     const { result } = renderHook(() =>
-      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+      useReceiptInfoForm({ draft: VALID_DRAFT }),
     )
     act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'A' }))
     act(() => result.current.dispatch({ type: 'SET_ANONYMOUS', value: true }))
@@ -124,7 +122,7 @@ describe('useReceiptInfoForm (hook)', () => {
 
   it('H4: 121 字 donorName → isValid=false', () => {
     const { result } = renderHook(() =>
-      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+      useReceiptInfoForm({ draft: VALID_DRAFT }),
     )
     act(() =>
       result.current.dispatch({
@@ -138,7 +136,7 @@ describe('useReceiptInfoForm (hook)', () => {
   it('H5: handleSubmit (valid) → fetch POST /api/checkout/purchase + body 對齊 BE 022 §4.3 + toast.success', async () => {
     mockFetchOk()
     const { result } = renderHook(() =>
-      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+      useReceiptInfoForm({ draft: VALID_DRAFT }),
     )
     act(() =>
       result.current.dispatch({ type: 'SET_DONOR_NAME', value: ' Alice ' }),
@@ -166,7 +164,7 @@ describe('useReceiptInfoForm (hook)', () => {
 
   it('H6: handleSubmit (!isValid) → fetch 不被叫、toast 不被叫', async () => {
     const { result } = renderHook(() =>
-      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+      useReceiptInfoForm({ draft: VALID_DRAFT }),
     )
     await act(async () => {
       await result.current.handleSubmit()
@@ -178,7 +176,7 @@ describe('useReceiptInfoForm (hook)', () => {
   it('H7: payload 不含 receiptOption / donationFrequency / billingDay / charityId', async () => {
     mockFetchOk()
     const { result } = renderHook(() =>
-      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+      useReceiptInfoForm({ draft: VALID_DRAFT }),
     )
     act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'X' }))
     await act(async () => {
@@ -195,7 +193,7 @@ describe('useReceiptInfoForm (hook)', () => {
   it('H8 (v0.5): BFF 5xx → toast.error', async () => {
     mockFetchError(500)
     const { result } = renderHook(() =>
-      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+      useReceiptInfoForm({ draft: VALID_DRAFT }),
     )
     act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'X' }))
     await act(async () => {
@@ -209,7 +207,7 @@ describe('useReceiptInfoForm (hook)', () => {
   it('H9 (v0.5): network throw → 同樣 toast.error', async () => {
     mockFetchThrow()
     const { result } = renderHook(() =>
-      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+      useReceiptInfoForm({ draft: VALID_DRAFT }),
     )
     act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'X' }))
     await act(async () => {

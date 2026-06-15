@@ -22,6 +22,7 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/checkout/purchase',
 }))
 
+import type { PurchaseDraft } from './draft-store'
 import { PurchaseConfirmPage } from './PurchaseConfirmPage'
 
 const ITEM_ID = '00000000-0000-4000-8000-000000000099'
@@ -35,6 +36,10 @@ const ITEM: ItemDetail = {
   charity: { id: 'cha-1', name: '財團法人台灣紅絲帶基金會' },
   categories: [],
 }
+
+// v0.7 — DonationConfirmPage props collapsed to `draft`
+const DRAFT_QTY_2: PurchaseDraft = { quantity: 2, item: ITEM }
+const DRAFT_QTY_1: PurchaseDraft = { quantity: 1, item: ITEM }
 
 const fetchMock = vi.fn<typeof fetch>()
 beforeEach(() => {
@@ -53,12 +58,7 @@ afterEach(() => {
 
 describe('PurchaseConfirmPage', () => {
   it('1: 三個 panel（購買明細 / 捐款人基本資料 disclaimer / 收據資訊）+ sticky CTA', () => {
-    render(
-      <PurchaseConfirmPage
-        query={{ saleItemId: ITEM_ID, quantity: 2 }}
-        item={ITEM}
-      />,
-    )
+    render(<PurchaseConfirmPage draft={DRAFT_QTY_2} />)
     expect(screen.getByText('購買明細')).toBeInTheDocument()
     expect(screen.getByText('捐款人基本資料')).toBeInTheDocument()
     expect(screen.getByText('收據資訊')).toBeInTheDocument()
@@ -68,12 +68,7 @@ describe('PurchaseConfirmPage', () => {
   })
 
   it('2: 總計 = priceTwd × quantity（brand 紅字）', () => {
-    render(
-      <PurchaseConfirmPage
-        query={{ saleItemId: ITEM_ID, quantity: 2 }}
-        item={ITEM}
-      />,
-    )
+    render(<PurchaseConfirmPage draft={DRAFT_QTY_2} />)
     // 449 * 2 = 898；subtotal/total 因 shipping=0 都顯示
     const total = screen.getByText('總計').nextElementSibling as HTMLElement
     expect(total.textContent).toMatch(/TWD\s*898/)
@@ -82,27 +77,15 @@ describe('PurchaseConfirmPage', () => {
   })
 
   it('3: 商品名 / 主辦團體名顯示', () => {
-    render(
-      <PurchaseConfirmPage
-        query={{ saleItemId: ITEM_ID, quantity: 1 }}
-        item={ITEM}
-      />,
-    )
-    expect(
-      screen.getAllByText(/藤椒牛肉麵/).length,
-    ).toBeGreaterThan(0)
+    render(<PurchaseConfirmPage draft={DRAFT_QTY_1} />)
+    expect(screen.getAllByText(/藤椒牛肉麵/).length).toBeGreaterThan(0)
     expect(
       screen.getByText('財團法人台灣紅絲帶基金會'),
     ).toBeInTheDocument()
   })
 
   it('4: 姓名 input 打字 → submit 從 disabled 變 enabled', async () => {
-    render(
-      <PurchaseConfirmPage
-        query={{ saleItemId: ITEM_ID, quantity: 1 }}
-        item={ITEM}
-      />,
-    )
+    render(<PurchaseConfirmPage draft={DRAFT_QTY_1} />)
     const submit = screen.getByRole('button', { name: '確認送出' })
     expect(submit).toBeDisabled()
     await userEvent.type(screen.getByLabelText(/捐款人姓名/), 'Alice')
@@ -110,12 +93,7 @@ describe('PurchaseConfirmPage', () => {
   })
 
   it('5: 勾匿名 checkbox → state 翻轉、submit 仍可（不影響 isValid）', async () => {
-    render(
-      <PurchaseConfirmPage
-        query={{ saleItemId: ITEM_ID, quantity: 1 }}
-        item={ITEM}
-      />,
-    )
+    render(<PurchaseConfirmPage draft={DRAFT_QTY_1} />)
     const checkbox = screen.getByRole('checkbox', { name: /匿名捐款/ })
     expect(checkbox).not.toBeChecked()
     await userEvent.click(checkbox)
@@ -123,12 +101,7 @@ describe('PurchaseConfirmPage', () => {
   })
 
   it('6: 填齊後送出 → toast.success', async () => {
-    render(
-      <PurchaseConfirmPage
-        query={{ saleItemId: ITEM_ID, quantity: 1 }}
-        item={ITEM}
-      />,
-    )
+    render(<PurchaseConfirmPage draft={DRAFT_QTY_1} />)
     await userEvent.type(screen.getByLabelText(/捐款人姓名/), 'Alice')
     await userEvent.click(screen.getByRole('button', { name: '確認送出' }))
     expect(fetchMock).toHaveBeenCalledWith(

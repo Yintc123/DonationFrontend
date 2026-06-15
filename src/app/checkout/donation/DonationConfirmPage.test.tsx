@@ -62,20 +62,31 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+// v0.7 — DonationConfirmPage props collapsed to `draft`. These helpers
+// keep each test focused on the variant it cares about.
+import type { DonationDraft } from './draft-store'
+
+const CHARITY_DRAFT_RECURRING: DonationDraft = {
+  donationFrequency: 'RECURRING',
+  billingDay: 'DAY_16',
+  amountTwd: 500,
+  target: { type: 'CHARITY', detail: CHARITY },
+}
+const CHARITY_DRAFT_ONE_TIME: DonationDraft = {
+  donationFrequency: 'ONE_TIME',
+  amountTwd: 100,
+  target: { type: 'CHARITY', detail: CHARITY },
+}
+const PROJECT_DRAFT_RECURRING: DonationDraft = {
+  donationFrequency: 'RECURRING',
+  billingDay: 'DAY_6',
+  amountTwd: 100,
+  target: { type: 'DONATION_PROJECT', detail: PROJECT },
+}
+
 describe('DonationConfirmPage', () => {
   it('1: charity 直捐 RECURRING → 顯示「直接捐款給團體」+ 團體名 + 扣款週期 + 下次扣款日期 + TWD 金額', () => {
-    render(
-      <DonationConfirmPage
-        query={{
-          targetType: 'CHARITY',
-          targetId: CHARITY_ID,
-          donationFrequency: 'RECURRING',
-          billingDay: 'DAY_16',
-          amountTwd: 500,
-        }}
-        target={CHARITY}
-      />,
-    )
+    render(<DonationConfirmPage draft={CHARITY_DRAFT_RECURRING} />)
     expect(screen.getByText('直接捐款給團體')).toBeInTheDocument()
     expect(screen.getByText('ACC 中華耆幼關懷協會')).toBeInTheDocument()
     expect(screen.getByText('定期捐款')).toBeInTheDocument()
@@ -85,18 +96,7 @@ describe('DonationConfirmPage', () => {
   })
 
   it('2: project 捐款 → 顯示專案名（捐款專案）+ 主辦團體名（捐款對象）', () => {
-    render(
-      <DonationConfirmPage
-        query={{
-          targetType: 'DONATION_PROJECT',
-          targetId: CHARITY_ID,
-          donationFrequency: 'RECURRING',
-          billingDay: 'DAY_6',
-          amountTwd: 100,
-        }}
-        target={PROJECT}
-      />,
-    )
+    render(<DonationConfirmPage draft={PROJECT_DRAFT_RECURRING} />)
     expect(
       screen.getByText('偏鄉AI 數位學習計畫－給孩子一雙探索未來的雙手'),
     ).toBeInTheDocument()
@@ -106,51 +106,43 @@ describe('DonationConfirmPage', () => {
   })
 
   it('3: ONE_TIME → 扣款週期 / 下次扣款日期 row 不渲染', () => {
-    render(
-      <DonationConfirmPage
-        query={{
-          targetType: 'CHARITY',
-          targetId: CHARITY_ID,
-          donationFrequency: 'ONE_TIME',
-          amountTwd: 1000,
-        }}
-        target={CHARITY}
-      />,
-    )
+    render(<DonationConfirmPage draft={CHARITY_DRAFT_ONE_TIME} />)
     expect(screen.getByText('單次捐款')).toBeInTheDocument()
     expect(screen.queryByText('扣款週期')).toBeNull()
     expect(screen.queryByText('下次扣款日期')).toBeNull()
   })
 
-  it('4: sticky CTA「確認送出」初始 disabled；填姓名後 enabled', async () => {
-    render(
-      <DonationConfirmPage
-        query={{
-          targetType: 'CHARITY',
-          targetId: CHARITY_ID,
-          donationFrequency: 'ONE_TIME',
-          amountTwd: 100,
-        }}
-        target={CHARITY}
-      />,
-    )
+  it('4 (v0.9): 初始 → 捐款人姓名 input 不渲染；先選收據方式才出現', async () => {
+    render(<DonationConfirmPage draft={CHARITY_DRAFT_ONE_TIME} />)
+    expect(screen.queryByLabelText(/捐款人姓名/)).toBeNull()
+    expect(screen.queryByRole('checkbox', { name: /匿名捐款/ })).toBeNull()
+
+    // 選 receiptOption 後姓名 input 出現
+    const select = screen.getByLabelText(/收據開立方式/) as HTMLSelectElement
+    await userEvent.selectOptions(select, 'NONE')
+    expect(screen.getByLabelText(/捐款人姓名/)).toBeInTheDocument()
+  })
+
+  it('4b (v0.9): sticky CTA「確認送出」收據未選 disabled；選後填姓名才 enabled', async () => {
+    render(<DonationConfirmPage draft={CHARITY_DRAFT_ONE_TIME} />)
     const submit = screen.getByRole('button', { name: '確認送出' })
     expect(submit).toBeDisabled()
+
+    // 只選收據還不夠，仍 disabled
+    const select = screen.getByLabelText(/收據開立方式/) as HTMLSelectElement
+    await userEvent.selectOptions(select, 'NONE')
+    expect(submit).toBeDisabled()
+
+    // 填姓名後 enabled
     await userEvent.type(screen.getByLabelText(/捐款人姓名/), 'Alice')
     expect(submit).toBeEnabled()
   })
 
   it('5: 填齊後送出 → toast.success', async () => {
-    render(
-      <DonationConfirmPage
-        query={{
-          targetType: 'CHARITY',
-          targetId: CHARITY_ID,
-          donationFrequency: 'ONE_TIME',
-          amountTwd: 100,
-        }}
-        target={CHARITY}
-      />,
+    render(<DonationConfirmPage draft={CHARITY_DRAFT_ONE_TIME} />)
+    await userEvent.selectOptions(
+      screen.getByLabelText(/收據開立方式/),
+      'NONE',
     )
     await userEvent.type(screen.getByLabelText(/捐款人姓名/), 'Alice')
     await userEvent.click(screen.getByRole('button', { name: '確認送出' }))
@@ -161,21 +153,36 @@ describe('DonationConfirmPage', () => {
     expect(toastSuccessMock).toHaveBeenCalledTimes(1)
   })
 
-  it('6: ReceiptOption 5 個值都出現在 <select> options', () => {
-    render(
-      <DonationConfirmPage
-        query={{
-          targetType: 'CHARITY',
-          targetId: CHARITY_ID,
-          donationFrequency: 'ONE_TIME',
-          amountTwd: 100,
-        }}
-        target={CHARITY}
-      />,
+  it('5b (v0.8): 選收據後「我要匿名捐款」checkbox 出現 + 預設未勾', async () => {
+    render(<DonationConfirmPage draft={CHARITY_DRAFT_ONE_TIME} />)
+    await userEvent.selectOptions(
+      screen.getByLabelText(/收據開立方式/),
+      'NONE',
     )
+    const checkbox = screen.getByRole('checkbox', { name: /匿名捐款/ })
+    expect(checkbox).toBeInTheDocument()
+    expect(checkbox).not.toBeChecked()
+  })
+
+  it('5c (v0.8): 勾匿名 checkbox → state 翻轉', async () => {
+    render(<DonationConfirmPage draft={CHARITY_DRAFT_ONE_TIME} />)
+    await userEvent.selectOptions(
+      screen.getByLabelText(/收據開立方式/),
+      'NONE',
+    )
+    const checkbox = screen.getByRole('checkbox', { name: /匿名捐款/ })
+    await userEvent.click(checkbox)
+    expect(checkbox).toBeChecked()
+  })
+
+  it('6 (v0.9): <select> 含 5 個 BE enum + 1 個 placeholder（共 6 options，第一個 disabled）', () => {
+    render(<DonationConfirmPage draft={CHARITY_DRAFT_ONE_TIME} />)
     const select = screen.getByLabelText(/收據開立方式/) as HTMLSelectElement
-    expect(select.options).toHaveLength(5)
-    expect(Array.from(select.options).map((o) => o.value)).toEqual([
+    expect(select.options).toHaveLength(6) // placeholder + 5 BE enums
+    // placeholder 是第一個、disabled、value=''
+    expect(select.options[0].value).toBe('')
+    expect(select.options[0].disabled).toBe(true)
+    expect(Array.from(select.options).slice(1).map((o) => o.value)).toEqual([
       'NONE',
       'INDIVIDUAL',
       'CORPORATE',

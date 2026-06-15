@@ -1,24 +1,20 @@
 'use client'
 
-// Spec 009b v0.4 — sale-item purchase confirm form state + hook.
+// Spec 009b v0.7 — sale-item purchase confirm form state + hook.
 //
 // Layout per spec: donorName + isAnonymous (no receiptOption — BE 022
 // §4.3 SaleItemPurchaseBody does not accept it). Payload shape mirrors
-// BE verbatim so a future BFF route can forward without translation
-// (ADR 012). The `_endpoint` is a FE-side discriminator the BFF strips
-// before forwarding.
+// BE verbatim so the BFF route forwards without translation (ADR 012).
+// The `_endpoint` is a FE-side discriminator the BFF strips before
+// sending.
+//
+// v0.7 — opts collapsed from { query, item } → { draft } from the
+// in-memory store. Sheet writes the draft; confirm page reads it.
 
 import { useReducer, type Dispatch } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import type { ItemDetail } from '@/lib/schemas/detail'
-
-// ─── Query (mirrors page.tsx Zod schema) ───────────────────────────
-
-export type PurchaseCheckoutQuery = {
-  saleItemId: string
-  quantity: number
-}
+import { clearPurchaseDraft, type PurchaseDraft } from './draft-store'
 
 // ─── Form state ────────────────────────────────────────────────────
 
@@ -55,22 +51,21 @@ export type PurchaseConfirmPayload = {
 }
 
 export function buildPayload(
-  query: PurchaseCheckoutQuery,
+  draft: PurchaseDraft,
   form: FormState,
 ): PurchaseConfirmPayload {
   return {
     _endpoint: '/v1/donation/orders/sale-item-purchase',
     donorName: form.donorName.trim(),
     isAnonymous: form.isAnonymous,
-    items: [{ saleItemId: query.saleItemId, quantity: query.quantity }],
+    items: [{ saleItemId: draft.item.id, quantity: draft.quantity }],
   }
 }
 
 // ─── Hook ──────────────────────────────────────────────────────────
 
 export type UseReceiptInfoFormOpts = {
-  query: PurchaseCheckoutQuery
-  item: ItemDetail
+  draft: PurchaseDraft
 }
 
 export type UseReceiptInfoFormReturn = {
@@ -96,13 +91,13 @@ export function useReceiptInfoForm(
 
   // Derived totals — FE displays them, BE recomputes from SaleItem.priceTwd
   // snapshot at create time (BE 022 §4.3 internal behavior).
-  const subtotal = opts.item.priceTwd * opts.query.quantity
+  const subtotal = opts.draft.item.priceTwd * opts.draft.quantity
   const shipping = 0
   const total = subtotal + shipping
 
   const handleSubmit = async () => {
     if (!isValid) return
-    const payload = buildPayload(opts.query, form)
+    const payload = buildPayload(opts.draft, form)
     try {
       const res = await fetch('/api/checkout/purchase', {
         method: 'POST',
@@ -114,8 +109,9 @@ export function useReceiptInfoForm(
         return
       }
       toast.success('已送出（demo 不接金流）')
-      // router.replace — confirm 頁送出後不該留在 history（同 009a 邏輯）。
-      router.replace(`/sale-items/${opts.query.saleItemId}`)
+      // v0.7 — clear the in-memory draft on success; replace not push.
+      clearPurchaseDraft()
+      router.replace(`/sale-items/${opts.draft.item.id}`)
     } catch {
       toast.error('送出失敗，請稍後再試')
     }

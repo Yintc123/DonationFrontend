@@ -14,18 +14,21 @@
 // a z-index and the modal backdrop (z-40) covers them when a sheet opens.
 
 import { useRef, useState } from 'react'
+import type { ItemDetail } from '@/lib/schemas/detail'
 import { DonationSettingsSheet } from './DonationSettingsSheet'
 import { PurchaseQtySheet } from './PurchaseQtySheet'
 import type { DonationTarget } from './useDonationSettingsForm'
-import type { PurchaseItem } from './usePurchaseQtyForm'
 
+// v0.7 — target / item now carry the full pre-fetched detail object so the
+// sheet can stash it in the in-memory draft store. The confirm page reads
+// from that store instead of refetching via a URL-query → RSC roundtrip.
 type CtaIslandProps = {
   label: string
   /** true → wrap the trigger in a sticky bottom chrome row */
   sticky?: boolean
 } & (
   | { kind: 'donation'; target: DonationTarget }
-  | { kind: 'purchase'; item: PurchaseItem }
+  | { kind: 'purchase'; item: ItemDetail }
 )
 
 export function CtaIsland(props: CtaIslandProps) {

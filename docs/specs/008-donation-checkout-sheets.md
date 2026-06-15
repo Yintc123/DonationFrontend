@@ -1,6 +1,6 @@
 # Spec 008：捐款 / 購買 bottom-sheet 結帳（index）
 
-- **狀態**：Draft（v0.7 — enum / payload / URL 全面對齊 backend spec 021 / 022，避免 BFF mapping 層）
+- **狀態**：Draft（v0.8 — CtaIsland 升級為餵 detail object；sheet 寫 in-memory draft store 取代 URL query；對應 [009 v0.5](./009-checkout-confirm.md#2-routingv05--bare-path--in-memory-draft-store)）
 - **建立日期**：2026-06-15
 - **Figma 對應**：IMG_4885（charity 捐款設定）/ IMG_4886（donation 捐款設定，內容同 4885）/ IMG_4887（sale-item 購買數量）
 
@@ -66,14 +66,17 @@ DonationSettingsSheet 在 charity / donation 兩種 target 共用同一份元件
 
 ```tsx
 // src/app/checkout/CtaIsland.tsx ('use client')
-// v0.7 — type 對齊 BE OrderSubjectType（CHARITY / DONATION_PROJECT / SALE_ITEM）
-type DonationTarget = { type: 'CHARITY' | 'DONATION_PROJECT'; id: string }
+// v0.8 — target / item 攜帶 FULL detail object（sheet 寫進 draft store，
+// confirm 頁不再 fetch）。type 對齊 BE OrderSubjectType。
+type DonationTarget =
+  | { type: 'CHARITY'; detail: CharityDetail }
+  | { type: 'DONATION_PROJECT'; detail: DonationDetail }
 
 type CtaIslandProps = {
   label: string
   sticky?: boolean         // true → 外包 sticky bottom wrapper（donation/item 用）
 } & ({ kind: 'donation'; target: DonationTarget }
-   | { kind: 'purchase'; item: Item })
+   | { kind: 'purchase'; item: ItemDetail })
 
 export function CtaIsland(props: CtaIslandProps) {
   const [open, setOpen] = useState(false)
@@ -114,9 +117,9 @@ export function CtaIsland(props: CtaIslandProps) {
 
 | Detail page | 現況 CTA placeholder | 取代為 |
 |---|---|---|
-| charity | **in-card** static button `<DirectDonateCta>`（[004a v0.2 §3](./004a-charity-detail.md)） | `<CtaIsland kind="donation" target={{type:'CHARITY', id}} label="直接捐款給團體" />`（sticky=false） |
-| donation | **sticky bottom** `<DonateCta>` 的 `<div className="sticky bottom-0 ...">` | `<CtaIsland kind="donation" target={{type:'DONATION_PROJECT', id}} label="立即捐款" sticky />` |
-| item | **sticky bottom** `<DonateCta>` 同上 | `<CtaIsland kind="purchase" item={item} label="立即捐款" sticky />` |
+| charity | **in-card** static button `<DirectDonateCta>`（[004a v0.2 §3](./004a-charity-detail.md)） | `<CtaIsland kind="donation" target={{type:'CHARITY', detail: charity}} label="直接捐款給團體" />`（sticky=false） |
+| donation | **sticky bottom** `<DonateCta>` 的 `<div className="sticky bottom-0 ...">` | `<CtaIsland kind="donation" target={{type:'DONATION_PROJECT', detail: donation}} label="立即捐款" sticky />` |
+| item | **sticky bottom** `<DonateCta>` 同上 | `<CtaIsland kind="purchase" item={item} label="立即捐款" sticky />`（item: ItemDetail） |
 
 > v0.4 spec 008 不改 CTA 的「位置」（sticky vs in-card），只改 CTA 的「行為」（從 `console.log` placeholder 改為打開 sheet）。位置策略由 [spec 004a/b/c](./004-detail-pages.md) 決定。
 
@@ -176,3 +179,4 @@ export function CtaIsland(props: CtaIslandProps) {
 | 0.5 | 2026-06-15 | **production 最佳實踐補完**：(1) [008a v0.2](./008a-bottom-sheet.md) BottomSheet 用 React **Portal**（`createPortal(tree, document.body)` + `mounted` SSR guard），避免未來 ancestor `transform/filter` 偷走 `fixed` 定位；(2) [008b v0.2](./008b-donation-settings-sheet.md) DonationSettings 改 **`useReducer`** + **`amountInputRaw` 拆兩欄**，解使用者刪字時 ghost-reset bug；(3) [008b](./008b-donation-settings-sheet.md) / [008c v0.2](./008c-purchase-qty-sheet.md) 整 sheet body 包 **`<form onSubmit>`**、submit button `type="submit"`，支援 Enter / iOS Done 鍵 submit。index §5 共同決策表加 4 條 cross-spec 規則 |
 | 0.6 | 2026-06-15 | **Container / Presentational 分層**：[008b v0.4](./008b-donation-settings-sheet.md) `useDonationSettingsForm` + [008c v0.4](./008c-purchase-qty-sheet.md) `usePurchaseQtyForm` + [009a v0.2](./009a-donation-confirm.md) `useDonorInfoForm` + [009b v0.2](./009b-purchase-confirm.md) `useReceiptInfoForm` 四個 custom hook 把 React 整合層從 component 移出；component 變純 UI（純 props → JSX、零 useReducer/useEffect/useRouter 呼叫）。對應 test plan 升級為三層：reducer pure / hook integration / component visual。index §5 共同決策表加 2 條 |
 | 0.7 | 2026-06-15 | **enum / payload / URL 全面對齊 backend spec 021 / 022**（Option C）：[008b v0.5](./008b-donation-settings-sheet.md) + [008c v0.5](./008c-purchase-qty-sheet.md) 同步改寫；CtaIsland 的 `target.type` 從 `'charity'\|'donation'` 改為 `'CHARITY'\|'DONATION_PROJECT'`（對齊 BE OrderSubjectType）；§4.2 detail page 取代規則同步；§5 共同決策表新增一條「enum / payload 命名一律對齊 backend」總綱；§6 e2e 規劃描述更新為 BE 命名 |
+| 0.8 | 2026-06-16 | **CtaIsland 攜 detail object + sheet 寫 in-memory draft store**（隨 [009 v0.5](./009-checkout-confirm.md#2-routingv05--bare-path--in-memory-draft-store) 改寫）：(a) CtaIsland 的 `target` 從 `{ type, id }` 升為 `{ type, detail: CharityDetail \| DonationDetail }`、`item` 從 narrow PurchaseItem 升回 ItemDetail——detail page 把整個 detail 物件餵進來，sheet 把它寫進 store，[009a / 009b](./009-checkout-confirm.md) confirm 頁從 store peek，不再 RSC fetch；(b) §4 CtaIsland reference 程式碼更新；(c) §4.2 取代規則表的 `target={{...id}}` 改為 `target={{...detail}}`；(d) [008b v0.8](./008b-donation-settings-sheet.md) / [008c v0.6](./008c-purchase-qty-sheet.md) 對應 sheet handleSubmit 改寫紀錄；(e) sheet bare path push、confirm 頁無 draft → redirect `/donation` |

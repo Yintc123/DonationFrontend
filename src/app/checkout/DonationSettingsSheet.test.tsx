@@ -12,13 +12,17 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPushMock }),
 }))
 
+import type { CharityDetail } from '@/lib/schemas/detail'
 import { DonationSettingsSheet } from './DonationSettingsSheet'
 import type { DonationTarget } from './useDonationSettingsForm'
 
-const TARGET: DonationTarget = {
-  type: 'CHARITY',
+const CHARITY: CharityDetail = {
   id: '00000000-0000-4000-8000-000000000001',
+  name: 'ACC',
+  description: '',
+  categories: [],
 }
+const TARGET: DonationTarget = { type: 'CHARITY', detail: CHARITY }
 
 beforeEach(() => {
   routerPushMock.mockReset()
@@ -136,9 +140,7 @@ describe('DonationSettingsSheet', () => {
     input.focus()
     await userEvent.keyboard('{Enter}')
 
-    expect(routerPushMock).toHaveBeenCalledTimes(1)
-    const url = routerPushMock.mock.calls[0][0] as string
-    expect(url).toContain('billingDay=DAY_6')
-    expect(url).toContain('amountTwd=500')
+    // v0.7 — sheet pushes bare path (data lives in in-memory store now)
+    expect(routerPushMock).toHaveBeenCalledWith('/checkout/donation')
   })
 })

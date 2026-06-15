@@ -14,6 +14,8 @@
 
 import { useEffect, useReducer, type Dispatch } from 'react'
 import { useRouter } from 'next/navigation'
+import type { CharityDetail, DonationDetail } from '@/lib/schemas/detail'
+import { setDonationDraft } from './donation/draft-store'
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -34,10 +36,15 @@ export const MIN_PRESET_AMOUNT: PresetAmount = PRESET_AMOUNTS.reduce(
   PRESET_AMOUNTS[0],
 )
 
-export type DonationTarget = {
-  type: 'CHARITY' | 'DONATION_PROJECT'
-  id: string
-}
+/**
+ * v0.7 — Target now carries the full pre-fetched detail object, not just
+ * { type, id }. The confirm page (which used to re-fetch via RSC + query
+ * params) reads target detail from the in-memory draft store, so the
+ * sheet needs to hand it along when stashing the draft.
+ */
+export type DonationTarget =
+  | { type: 'CHARITY'; detail: CharityDetail }
+  | { type: 'DONATION_PROJECT'; detail: DonationDetail }
 
 export type AmountState =
   | { source: 'preset'; value: PresetAmount }
@@ -100,10 +107,17 @@ export function reducer(state: FormState, action: Action): FormState {
         amountInputRaw: String(action.value),
       }
     case 'SET_INPUT': {
-      const parsed = parseAmount(action.raw)
+      // v0.7 — input is integer-only at the field level. Strip non-digits
+      // before storing raw so a pasted "1,000" / "12.5" / "TWD 500" never
+      // surfaces in the UI as those literal characters; the user sees the
+      // sanitised digits immediately. The ghost-reset fix from v0.2 still
+      // holds because deleting a digit (e.g. "100" → "00") keeps only
+      // digits in raw, just like before.
+      const sanitized = action.raw.replace(/[^0-9]/g, '')
+      const parsed = parseAmount(sanitized)
       return {
         ...state,
-        amountInputRaw: action.raw,
+        amountInputRaw: sanitized,
         amount: parsed !== null ? { source: 'input', value: parsed } : null,
       }
     }
@@ -112,26 +126,11 @@ export function reducer(state: FormState, action: Action): FormState {
   }
 }
 
-export type DonationSettingsPayload = {
-  target: DonationTarget
-  donationFrequency: DonationFrequency
-  billingDay: BillingDay | null
-  amountTwd: number
-}
-
-export function buildPayload(
-  form: FormState,
-  target: DonationTarget,
-): DonationSettingsPayload {
-  return {
-    target,
-    donationFrequency: form.donationFrequency,
-    billingDay:
-      form.donationFrequency === 'ONE_TIME' ? null : form.billingDay,
-    // isValid gate guarantees amount is non-null when handleSubmit runs.
-    amountTwd: (form.amount as { source: string; value: number }).value,
-  }
-}
+/**
+ * v0.7 — buildPayload removed. Sheet writes the draft to the in-memory
+ * store via `setDonationDraft`; the confirm page builds the BE 022 body
+ * shape from the draft at submit time (see useDonorInfoForm.buildPayload).
+ */
 
 // ─── Hook ───────────────────────────────────────────────────────────────
 
@@ -167,15 +166,17 @@ export function useDonationSettingsForm(
 
   const handleSubmit = () => {
     if (!isValid) return
-    const payload = buildPayload(form, opts.target)
-    const params = new URLSearchParams({
-      targetType: payload.target.type,
-      targetId: payload.target.id,
-      donationFrequency: payload.donationFrequency,
-      ...(payload.billingDay !== null && { billingDay: payload.billingDay }),
-      amountTwd: String(payload.amountTwd),
+    // v0.7 — stash the draft in memory instead of round-tripping through the
+    // URL query string. The confirm page peeks this on mount; refresh /
+    // direct visit finds null and bounces to /donation.
+    setDonationDraft({
+      donationFrequency: form.donationFrequency,
+      ...(form.donationFrequency === 'RECURRING' &&
+        form.billingDay && { billingDay: form.billingDay }),
+      amountTwd: (form.amount as { source: string; value: number }).value,
+      target: opts.target,
     })
-    router.push(`/checkout/donation?${params.toString()}`)
+    router.push('/checkout/donation')
     opts.onClose()
   }
 

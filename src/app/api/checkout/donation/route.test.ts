@@ -143,6 +143,25 @@ describe('POST /api/checkout/donation', () => {
     })
   })
 
+  it('v0.5: isAnonymous=true 也通過 schema（跨三類訂單支援匿名）', async () => {
+    let receivedBody: Record<string, unknown> | undefined
+    mockBackend(
+      'post',
+      'http://backend.test/v1/donation/orders/charity-donation',
+      async (req) => {
+        receivedBody = (await req.json()) as Record<string, unknown>
+        return HttpResponse.json(
+          { id: ORDER_ID, status: 'PENDING' },
+          { status: 201 },
+        )
+      },
+    )
+    const body = { ...VALID_CHARITY_BODY, isAnonymous: true }
+    const res = await POST(postReq(body), noParams)
+    expect(res.status).toBe(200)
+    expect(receivedBody?.isAnonymous).toBe(true)
+  })
+
   it('project-donation body → 轉發到 BE /project-donation', async () => {
     let receivedUrl: string | undefined
     mockBackend(

@@ -1,6 +1,6 @@
 # Spec 008b：`<DonationSettingsSheet>` 捐款設定 sheet
 
-- **狀態**：Draft（v0.6 — 點 preset 自動帶入 input；自訂金額 < min preset 顯示紅字提示 + gate submit）
+- **狀態**：Draft（v0.8 — sheet handleSubmit 寫 [donation/draft-store](../../src/app/checkout/donation/draft-store.ts) + bare path push；`DonationTarget` 攜帶完整 detail）
 - **路徑（規劃）**：
   - `src/app/checkout/useDonationSettingsForm.ts` + `.test.ts`（v0.4 — pure logic hook）
   - `src/app/checkout/DonationSettingsSheet.tsx` + `.test.tsx`（v0.4 起為純 UI；charity / donation 兩個詳情頁共用）
@@ -127,10 +127,16 @@ function reducer(state: FormState, action: Action): FormState {
         amountInputRaw: '',                              // 點 preset 清 input 顯示
       }
     case 'SET_INPUT': {
-      const parsed = parseAmount(action.raw)
+      // v0.7 — input is integer-only at the field level. Strip non-digits
+      // before storing raw so a pasted/typed "12.5" / "1,000" / "TWD 500"
+      // doesn't surface in the UI as those literal chars; the user just
+      // sees the sanitised digits. v0.2 ghost-reset fix still holds because
+      // deleting a digit (e.g. "100" → "00") keeps only digits in raw.
+      const sanitized = action.raw.replace(/[^0-9]/g, '')
+      const parsed = parseAmount(sanitized)
       return {
         ...state,
-        amountInputRaw: action.raw,                      // 一律保留原始輸入
+        amountInputRaw: sanitized,
         amount: parsed !== null ? { source: 'input', value: parsed } : null,
       }
     }
@@ -147,7 +153,7 @@ function reducer(state: FormState, action: Action): FormState {
 | 互動 | dispatch | UI 行為 |
 |---|---|---|
 | 點 preset 100 / 500 / 1000 | `{type:'SET_PRESET', value}` | amount.source='preset'；**input 自動帶入該金額 `raw=String(value)`**（v0.6）；對應 preset selected |
-| input onChange（任何字串） | `{type:'SET_INPUT', raw}` | raw 一律保留；amount 視 parseAmount 結果可能 null |
+| input onChange（任何字串） | `{type:'SET_INPUT', raw}` | **v0.7：raw 在 reducer 入口先 strip 非數字（整數 only）**；amount 視 parseAmount 結果可能 null |
 | 點 RECURRING / ONE_TIME segmented | `{type:'SET_FREQUENCY', donationFrequency}` | ONE_TIME 額外清 billingDay |
 | 點扣款日 6/16/26 pill | `{type:'SET_BILLING_DAY', billingDay}` | billingDay 切換 |
 | open=true 觸發 effect | `{type:'RESET'}` | 整 form 回 DEFAULT_FORM |
@@ -497,7 +503,10 @@ onClose()
 | R2 | SET_PRESET → state.amount = {source:'preset', value}；**amountInputRaw=String(value)**（v0.6 — 自動帶入 input） | OK |
 | R3 | SET_INPUT "100" → amount = {source:'input', value:100}；raw="100" | OK |
 | R4 | SET_INPUT "00" → amount=null；raw="00"（**raw 保留**，不被清空） | 解 ghost-reset |
-| R5 | SET_INPUT "1,500" → amount.value=1500（parseAmount strip 逗號）；raw="1,500" | OK |
+| R5 (v0.7) | SET_INPUT "1,500" → **raw 立刻變 "1500"**（reducer strip 逗號）、amount.value=1500 | OK |
+| R5b (v0.7) | SET_INPUT "12.5" → raw="125"、amount.value=125（小數點吃掉） | OK |
+| R5c (v0.7) | SET_INPUT "TWD 500" → raw="500"、amount.value=500（字母 / 空白吃掉） | OK |
+| R5d (v0.7) | SET_INPUT "abc" → raw=""、amount=null（全非數字） | OK |
 | R6 | SET_INPUT "" → amount=null；raw="" | OK |
 | R7 | RESET → DEFAULT_FORM | OK |
 
@@ -558,3 +567,5 @@ UI 渲染端，可大幅縮減（邏輯已在 hook test 覆蓋）：
 | 0.4 | 2026-06-15 | **抽 `useDonationSettingsForm` custom hook**：把 useReducer call site + useEffect reset + isValid + handleSubmit + router.push 整合層搬出 component；component 變純 UI 層、零 React hook 呼叫（除了 hook 本身）。三層 test plan：reducer R1~R7 pure / hook H1~H7 integration / component 6 個視覺。pattern 對齊 [008 index §5 v0.6 共同決策](./008-donation-checkout-sheets.md#5-共同決策跨-spec-一次說清楚) |
 | 0.5 | 2026-06-15 | **enum / payload / URL 全面對齊 backend spec 021 / 022**（Option C）：(a) `DonationType: 'monthly'\|'oneTime'` → `DonationFrequency: 'ONE_TIME'\|'RECURRING'`；(b) `ChargeDay: 6\|16\|26` (int) → `BillingDay: 'DAY_6'\|'DAY_16'\|'DAY_26'` (string enum)；(c) `target.type: 'charity'\|'donation'` → `'CHARITY'\|'DONATION_PROJECT'`（對應 BE OrderSubjectType）；(d) Payload field rename `amount` → `amountTwd`；(e) Action rename `SET_TYPE/SET_DAY` → `SET_FREQUENCY/SET_BILLING_DAY`；(f) `parseAmount` 加上限 `<= 1_000_000`；(g) DEFAULT_FORM `donationFrequency` 預設改 `RECURRING`（同義對齊原 `monthly` default）；(h) router.push query params 用 BE enum 值。BFF 收到 form payload 後可直接 forward 給 BE 022 endpoint，無需 mapping 層 |
 | 0.6 | 2026-06-15 | **UX 強化兩條**：(a) 點 preset 不再清空 input；改為 `raw = String(value)` 自動帶入「請輸入金額」欄位（行為更直覺、preset / input 視覺一致）；(b) 引入**最小金額 gate**：`PRESET_AMOUNTS` 跟 `MIN_PRESET_AMOUNT` 從 component 升到 hook 模組 export；`isValid` 加 `>= MIN_PRESET_AMOUNT` 條件；當 input 已 parse 出 `value < MIN_PRESET_AMOUNT` 時 input 下方渲染紅字 `<p role="alert" className="text-brand text-xs">本專案最低捐款金額為 {MIN_PRESET_AMOUNT}</p>`，並把 `aria-invalid` / `aria-describedby` 連到 input 上。空 input / 非數字 input 不顯示此 hint（不打擾）。新增 R2 改寫、H3b/H3c、component 3b/5b/5c/5d 共 7 個測試案例。對應 spec 008b §3.3 / §3.4 / §4.4 / §5.1 |
+| 0.7 | 2026-06-15 | **金額 input 強制整數**：reducer SET_INPUT 入口先 `action.raw.replace(/[^0-9]/g, '')` 再存進 `amountInputRaw`，UI 立刻吃掉小數點 / 逗號 / 字母 / 空白等非數字字元。v0.2 ghost-reset 規約不受影響（刪一個數字 "100"→"00" 仍是純數字 → raw 保留 "00"）。R5 測試斷言從「raw="1,500"」改為「raw="1500"」；新增 R5b（"12.5"→"125"）、R5c（"TWD 500"→"500"）、R5d（"abc"→""）三條反向案例 |
+| 0.8 | 2026-06-16 | **sheet 寫 in-memory draft store 取代 URL query**（隨 [009 v0.5](./009-checkout-confirm.md#2-routingv05--bare-path--in-memory-draft-store) 改寫）：(a) `DonationTarget` 從 `{ type, id }` 升為 `{ type, detail: CharityDetail \| DonationDetail }`——CtaIsland 把整 detail 餵進 sheet，sheet 寫進 store，confirm 頁不再 fetch；(b) `handleSubmit` 從 `router.push('/checkout/donation?targetType=...&billingDay=...&amountTwd=...')` 改為 `setDonationDraft({...}) + router.push('/checkout/donation')` bare path；(c) `buildPayload` 移除（confirm 頁的 `useDonorInfoForm.buildPayload` 取代之，從 draft 讀）；(d) §3.6 hook reference 內的 URL params 程式片段已過期，請以 [實際 hook 程式碼](../../src/app/checkout/useDonationSettingsForm.ts) 為準；(e) hook test H5 / H5b 改為斷言 `setDonationDraft` spy + bare path push |

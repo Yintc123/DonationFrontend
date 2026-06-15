@@ -1,27 +1,34 @@
-// Spec 008c v0.5 §7.2 — hook integration tests for usePurchaseQtyForm.
-// Pure logic is trivial (multiplication / clamp inside QtyStepper); no
-// dedicated reducer test layer is needed.
+// Spec 008c v0.7 §7.2 — hook integration tests for usePurchaseQtyForm.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import type { Item } from '@/lib/schemas/list'
+import type { ItemDetail } from '@/lib/schemas/detail'
 
 const routerPushMock = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPushMock }),
 }))
 
+import * as DraftStore from './purchase/draft-store'
 import { usePurchaseQtyForm } from './usePurchaseQtyForm'
 
-const ITEM: Item = {
+const ITEM: ItemDetail = {
   id: '00000000-0000-4000-8000-000000000099',
   name: '陸仕私廚 藤椒牛肉麵',
   description: '760g 袋（冷凍）',
+  content: '',
   priceTwd: 449,
+  charity: { id: 'cha-1', name: '台灣紅絲帶基金會' },
+  categories: [],
 }
+
+let setDraftSpy: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   routerPushMock.mockReset()
+  DraftStore._resetPurchaseDraftForTest()
+  setDraftSpy = vi.spyOn(DraftStore, 'setPurchaseDraft')
+  setDraftSpy.mockClear()
 })
 
 describe('usePurchaseQtyForm', () => {
@@ -45,18 +52,17 @@ describe('usePurchaseQtyForm', () => {
     expect(result.current.total).toBe(449 * 4)
   })
 
-  it('H3: handleSubmit → router.push 帶 saleItemId / quantity + onClose 被叫', () => {
+  it('H3 (v0.7): handleSubmit → setPurchaseDraft({ quantity, item }) + router.push("/checkout/purchase") + onClose 被叫', () => {
     const onClose = vi.fn()
     const { result } = renderHook(() =>
       usePurchaseQtyForm({ open: true, item: ITEM, onClose }),
     )
     act(() => result.current.setQuantity(3))
     act(() => result.current.handleSubmit())
-    expect(routerPushMock).toHaveBeenCalledTimes(1)
-    const url = routerPushMock.mock.calls[0][0] as string
-    expect(url).toMatch(/^\/checkout\/purchase\?/)
-    expect(url).toContain(`saleItemId=${ITEM.id}`)
-    expect(url).toContain('quantity=3')
+
+    expect(setDraftSpy).toHaveBeenCalledTimes(1)
+    expect(setDraftSpy).toHaveBeenCalledWith({ quantity: 3, item: ITEM })
+    expect(routerPushMock).toHaveBeenCalledWith('/checkout/purchase')
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 

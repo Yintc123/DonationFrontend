@@ -69,7 +69,7 @@ export default async function Page({ params }: PageProps) {
         )}
         <CtaIsland
           kind="donation"
-          target={{ type: 'CHARITY', id: charity.id }}
+          target={{ type: 'CHARITY', detail: charity }}
           label="直接捐款給團體"
         />
       </div>

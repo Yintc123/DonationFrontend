@@ -10,6 +10,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPushMock }),
 }))
 
+// v0.7 — sheet writes to in-memory draft store instead of URL query.
+// Spy the store mutator so we can assert what got staged for the
+// confirm page to pick up.
+import * as DraftStore from './donation/draft-store'
 import {
   DEFAULT_FORM,
   MIN_PRESET_AMOUNT,
@@ -19,12 +23,33 @@ import {
   useDonationSettingsForm,
   type DonationTarget,
 } from './useDonationSettingsForm'
+import type { CharityDetail, DonationDetail } from '@/lib/schemas/detail'
 
 const CHARITY_ID = '00000000-0000-4000-8000-000000000001'
-const CHARITY_TARGET: DonationTarget = { type: 'CHARITY', id: CHARITY_ID }
+const CHARITY: CharityDetail = {
+  id: CHARITY_ID,
+  name: 'ACC 中華耆幼關懷協會',
+  description: 'desc',
+  categories: [],
+}
+const PROJECT_ID = '00000000-0000-4000-8000-000000000002'
+const PROJECT: DonationDetail = {
+  id: PROJECT_ID,
+  name: '偏鄉AI 數位學習計畫',
+  description: 'd',
+  content: '',
+  charity: { id: CHARITY_ID, name: 'Org' },
+  categories: [],
+}
+const CHARITY_TARGET: DonationTarget = { type: 'CHARITY', detail: CHARITY }
+
+let setDraftSpy: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   routerPushMock.mockReset()
+  DraftStore._resetDonationDraftForTest()
+  setDraftSpy = vi.spyOn(DraftStore, 'setDonationDraft')
+  setDraftSpy.mockClear()    // calls accumulate across tests otherwise
 })
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -82,10 +107,28 @@ describe('reducer (pure)', () => {
     expect(next.amountInputRaw).toBe('00')
   })
 
-  it('R5: SET_INPUT "1,500" → strip 逗號、amount.value=1500、raw="1,500"', () => {
+  it('R5 (v0.7): SET_INPUT "1,500" → raw 立刻去逗號變 "1500"（input 只接受整數）', () => {
     const next = reducer(DEFAULT_FORM, { type: 'SET_INPUT', raw: '1,500' })
     expect(next.amount).toEqual({ source: 'input', value: 1500 })
-    expect(next.amountInputRaw).toBe('1,500')
+    expect(next.amountInputRaw).toBe('1500')
+  })
+
+  it('R5b (v0.7): SET_INPUT "12.5" → raw 立刻去小數點變 "125"', () => {
+    const next = reducer(DEFAULT_FORM, { type: 'SET_INPUT', raw: '12.5' })
+    expect(next.amount).toEqual({ source: 'input', value: 125 })
+    expect(next.amountInputRaw).toBe('125')
+  })
+
+  it('R5c (v0.7): SET_INPUT "TWD 500" → raw 去字母 + 空白變 "500"', () => {
+    const next = reducer(DEFAULT_FORM, { type: 'SET_INPUT', raw: 'TWD 500' })
+    expect(next.amount).toEqual({ source: 'input', value: 500 })
+    expect(next.amountInputRaw).toBe('500')
+  })
+
+  it('R5d (v0.7): SET_INPUT "abc" → 全部 strip、raw=""', () => {
+    const next = reducer(DEFAULT_FORM, { type: 'SET_INPUT', raw: 'abc' })
+    expect(next.amount).toBeNull()
+    expect(next.amountInputRaw).toBe('')
   })
 
   it('R6: SET_INPUT "" → amount=null、raw=""', () => {
@@ -243,7 +286,7 @@ describe('useDonationSettingsForm (hook integration)', () => {
     expect(result.current.isValid).toBe(true)
   })
 
-  it('H5: handleSubmit (isValid) → router.push + onClose 被叫', () => {
+  it('H5 (v0.7): handleSubmit (isValid) → setDonationDraft + router.push("/checkout/donation") + onClose 被叫', () => {
     const onClose = vi.fn()
     const { result } = renderHook(() =>
       useDonationSettingsForm({
@@ -260,22 +303,33 @@ describe('useDonationSettingsForm (hook integration)', () => {
       result.current.dispatch({ type: 'SET_PRESET', value: 100 })
     })
     act(() => result.current.handleSubmit())
+
+    // v0.7 — draft stashed in memory store, not in URL query
+    expect(setDraftSpy).toHaveBeenCalledTimes(1)
+    expect(setDraftSpy).toHaveBeenCalledWith({
+      donationFrequency: 'RECURRING',
+      billingDay: 'DAY_16',
+      amountTwd: 100,
+      target: CHARITY_TARGET,
+    })
+
+    // v0.7 — bare /checkout/donation, no query string
     expect(routerPushMock).toHaveBeenCalledTimes(1)
-    const url = routerPushMock.mock.calls[0][0] as string
-    expect(url).toContain('targetType=CHARITY')
-    expect(url).toContain(`targetId=${CHARITY_ID}`)
-    expect(url).toContain('donationFrequency=RECURRING')
-    expect(url).toContain('billingDay=DAY_16')
-    expect(url).toContain('amountTwd=100')
+    expect(routerPushMock).toHaveBeenCalledWith('/checkout/donation')
+
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('H5b: ONE_TIME → 不帶 billingDay 在 URL（對齊 BE 規約）', () => {
+  it('H5b (v0.7): ONE_TIME → 寫進 draft 不帶 billingDay 欄位', () => {
     const onClose = vi.fn()
+    const projectTarget: DonationTarget = {
+      type: 'DONATION_PROJECT',
+      detail: PROJECT,
+    }
     const { result } = renderHook(() =>
       useDonationSettingsForm({
         open: true,
-        target: { type: 'DONATION_PROJECT', id: CHARITY_ID },
+        target: projectTarget,
         onClose,
       }),
     )
@@ -287,10 +341,12 @@ describe('useDonationSettingsForm (hook integration)', () => {
       result.current.dispatch({ type: 'SET_PRESET', value: 500 })
     })
     act(() => result.current.handleSubmit())
-    const url = routerPushMock.mock.calls[0][0] as string
-    expect(url).toContain('donationFrequency=ONE_TIME')
-    expect(url).not.toContain('billingDay')
-    expect(url).toContain('targetType=DONATION_PROJECT')
+
+    const drafted = setDraftSpy.mock.calls[0]![0] as Record<string, unknown>
+    expect(drafted.donationFrequency).toBe('ONE_TIME')
+    expect('billingDay' in drafted).toBe(false)
+    expect(drafted.target).toEqual(projectTarget)
+    expect(routerPushMock).toHaveBeenCalledWith('/checkout/donation')
   })
 
   it('H6: handleSubmit (!isValid) → router.push 不被叫', () => {
@@ -304,6 +360,7 @@ describe('useDonationSettingsForm (hook integration)', () => {
     )
     act(() => result.current.handleSubmit())
     expect(routerPushMock).not.toHaveBeenCalled()
+    expect(setDraftSpy).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
   })
 

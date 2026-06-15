@@ -1,6 +1,6 @@
 # Spec 009：結帳確認頁（捐款 / 購買，index）
 
-- **狀態**：Draft（v0.4 — 「確認送出」實際 POST 到 BFF → BE 建單；不再 console.log placeholder）
+- **狀態**：Draft（v0.5 — confirm 頁資料改走 in-memory draft store；URL 不再帶 query；無 draft → 導回 /donation）
 - **建立日期**：2026-06-15
 - **Figma 對應**：IMG_4888（charity 直捐確認）/ IMG_4889（donation 確認）/ IMG_4890（item 購買確認）
 
@@ -23,52 +23,78 @@ v0.2 抽 009c：009a / 009b 排版高度相同（紅 hero + 白 panel + dl + dis
 
 ---
 
-## 2. Routing
+## 2. Routing（v0.5 — bare path + in-memory draft store）
 
-新增 2 條 client route，**都是 RSC**。URL query 命名一律對齊 [backend 022 §4 body shape](../../../backend/docs/specs/022-donation-order-api.md)：
+新增 2 條 client route。**v0.5 起 URL 完全不帶 query**——資料透過 in-memory draft store handoff：
 
-| Path | 子 spec | Query params | 對應 BE endpoint |
+| Path | 子 spec | 資料來源 | 對應 BE endpoint |
 |---|---|---|---|
-| `/checkout/donation` | [009a](./009a-donation-confirm.md) | `targetType` (`CHARITY`\|`DONATION_PROJECT`) / `targetId` (uuid) / `donationFrequency` (`ONE_TIME`\|`RECURRING`) / `billingDay` (`DAY_6`\|`DAY_16`\|`DAY_26`，只在 RECURRING) / `amountTwd` (int 1〜1_000_000) | `POST /v1/donation/orders/charity-donation` 或 `/project-donation`（依 targetType 分流，由 BFF 路由） |
-| `/checkout/purchase` | [009b](./009b-purchase-confirm.md) | `saleItemId` (uuid) / `quantity` (1〜100 int) | `POST /v1/donation/orders/sale-item-purchase` |
+| `/checkout/donation` | [009a](./009a-donation-confirm.md) | `src/app/checkout/donation/draft-store.ts`（peek 不到 → redirect `/donation`） | `POST /v1/donation/orders/charity-donation` 或 `/project-donation` |
+| `/checkout/purchase` | [009b](./009b-purchase-confirm.md) | `src/app/checkout/purchase/draft-store.ts`（peek 不到 → redirect `/donation`） | `POST /v1/donation/orders/sale-item-purchase` |
 
-**為何 FE path 2 條對應 BE 3 條 endpoint**：
+**為何 v0.5 從 URL query 改為 in-memory store**：
 
-charity-donation 與 project-donation 兩條 BE endpoint 的 UI 是同一頁（IMG_4888 / 4889 layout 完全相同），FE 用 `targetType` discriminator 在 page-level 區分；BFF 收到 form payload 時依 `targetType` 路由到對應 BE endpoint。SALE_ITEM 因 body shape 顯著不同（無 `donationFrequency` / `billingDay` / `receiptOption`、改帶 `items[]`），FE 才拆獨立 page。
+| 議題 | v0.1〜0.4 URL query | v0.5 in-memory store |
+|---|---|---|
+| 隱私 | ❌ amountTwd / targetType / targetId / saleItemId 暴露在網址列 / 歷史 / 截圖 / analytics referer | ✅ 完全 client-side、JS runtime 內 |
+| 防偽造 | ⚠️ 使用者可自構 URL 直闖 confirm 頁（BE 仍會驗，但 UX 怪） | ✅ store 空 → 強制導回 `/donation` |
+| Refresh 行為 | ✅ 還原狀態 | ⚠️ 失效 → redirect（**這是 feature**：confirm 頁本來就不該被直接訪問） |
+| 分享 / debug URL | ✅ 可貼 URL 給同事 | ❌ URL 無資訊；but confirm 頁本來就不該分享 |
 
-**Payload 為何走 URL query 而非 sessionStorage / context**：
+**為何 FE path 2 條對應 BE 3 條 endpoint**：charity-donation 與 project-donation UI 同一頁（IMG_4888 / 4889 layout 完全相同），用 `draft.target.type` discriminator 區分；BFF 收到 form payload 時依 `_endpoint` 路由到對應 BE。SALE_ITEM body shape 顯著不同（無 `donationFrequency` / `billingDay` / `receiptOption`、改帶 `items[]`），拆獨立 page。
 
-- ✅ refresh-safe（重新整理 / 直接打 URL 都能還原狀態）
-- ✅ 分享 / debug 友善（可貼整條 URL 給同事看）
-- ✅ Next.js RSC `searchParams` 是原生 API
-- ⚠️ URL 露出 amountTwd 等資訊 — demo 階段不敏感；真實金流 production 通常改 draft id pattern（backend 建 draft、URL 只帶 draft id）
+### 2.1 Draft store 設計
 
-**Server 端 validation**：
-
-兩條 route 在 RSC 解析 `searchParams` 時用 Zod 驗證；任一欄位不合規 → `notFound()` 顯示 Next 404（避免使用者亂貼 URL 進 broken state）。Zod enum 值與 [BE 022 TypeBox](../../../backend/docs/specs/022-donation-order-api.md) 對齊，使 BFF route handler 接 form 後可直接 forward 給 BE。
+兩個 store 各自一份 module-level singleton：
 
 ```ts
-// 009a 用（charity / project donation 共用）：
-const DonationCheckoutQuery = z.object({
-  targetType: z.enum(['CHARITY', 'DONATION_PROJECT']),
-  targetId: z.string().uuid(),
-  donationFrequency: z.enum(['ONE_TIME', 'RECURRING']),
-  billingDay: z.enum(['DAY_6', 'DAY_16', 'DAY_26']).optional(),
-  amountTwd: z.coerce.number().int().min(1).max(1_000_000),
-}).refine(
-  (q) => q.donationFrequency === 'ONE_TIME' || q.billingDay !== undefined,
-  { message: 'billingDay required when donationFrequency=RECURRING' },
-).refine(
-  (q) => q.donationFrequency !== 'ONE_TIME' || q.billingDay === undefined,
-  { message: 'billingDay must be omitted when donationFrequency=ONE_TIME' },
-)
+// donation/draft-store.ts
+export type DonationDraft = {
+  donationFrequency: 'ONE_TIME' | 'RECURRING'
+  billingDay?: 'DAY_6' | 'DAY_16' | 'DAY_26'
+  amountTwd: number
+  target:
+    | { type: 'CHARITY'; detail: CharityDetail }
+    | { type: 'DONATION_PROJECT'; detail: DonationDetail }
+}
 
-// 009b 用：
-const PurchaseCheckoutQuery = z.object({
-  saleItemId: z.string().uuid(),
-  quantity: z.coerce.number().int().min(1).max(100),
-})
+let _draft: DonationDraft | null = null
+export function setDonationDraft(d: DonationDraft): void { _draft = d }
+export function peekDonationDraft(): DonationDraft | null { return _draft }
+export function clearDonationDraft(): void { _draft = null }
 ```
+
+**為何 peek（不 take）**：React 19 Strict Mode dev 模式會雙 render effect。read-and-clear 會在第二跑空、誤導向 `/donation`。改成 peek + 顯式 clear（成功 submit 後）：
+
+| 觸發 | 動作 |
+|---|---|
+| sheet「下一步」 | `setDonationDraft({...})` + `router.push('/checkout/donation')` |
+| confirm 頁 mount | `peekDonationDraft()` → 有 draft 渲染 / 空 → `router.replace('/donation')` |
+| confirm 頁送出成功 | `clearDonationDraft()` + `router.replace(entryUrl)` |
+| 頁面 refresh / 新分頁 / 部署 | JS runtime 重啟 → module state reset → 下次訪問空 store → redirect |
+
+**Page entry pattern**：page.tsx 是 RSC（只 export metadata），實際邏輯在 `DonationConfirmPageEntry.tsx` (client)：
+
+```tsx
+// donation/page.tsx — RSC shell
+export const metadata = { title: '確認捐款資訊 | JKODonation' }
+export default function Page() { return <DonationConfirmPageEntry /> }
+
+// donation/DonationConfirmPageEntry.tsx — 'use client'
+export function DonationConfirmPageEntry() {
+  const router = useRouter()
+  const [state, setState] = useState<'pending' | DonationDraft | null>('pending')
+  useEffect(() => {
+    const d = peekDonationDraft()
+    if (!d) { router.replace('/donation'); setState(null); return }
+    setState(d)
+  }, [router])
+  if (state === 'pending' || state === null) return null
+  return <DonationConfirmPage draft={state} />
+}
+```
+
+`'pending'` state 是「effect 尚未跑」的 placeholder — 避免第一次 paint 時閃過 confirm 頁的舊資料。
 
 ---
 
@@ -147,7 +173,8 @@ TopNav + 紅 hero + `<form>` + sticky CTA 整套外殼實作於 [`<ConfirmPageSh
 | **整 form 用 `<form onSubmit>` + button `type="submit"`**（對齊 [008b §4.5](./008b-donation-settings-sheet.md)）| 009a / 009b | Enter / iOS Done 鍵自動 submit、SR friendly |
 | **「下次扣款日期」client-side 計算**（v0.1）→ **改 client display-only，BE create 時 server 算為準**（v0.3）| 009a | 規約對齊 [BE 021 §7.7 computeNextChargeAt](../../../backend/docs/specs/021-donation-order-data-model.md)（UTC + 嚴格 `<` 當天視為已過）；FE confirm 頁顯示先用同 BE 規則的 client 函式避免 demo 階段顯示與 BE 寫入錯位；接 BE 真打 endpoint 後改用 response `nextChargeAt` 為準 |
 | **送出 = `POST /api/checkout/{donation,purchase}` → BFF forwards to BE 022 §4.1-4.3** (v0.4) | 009a / 009b / [BFF route](#5-bff-route-handler-v04) | brief.md「不接金流」靠 BE 022 §2.3 mock-payment 設計達成：本期只到「BE 建單成 PENDING」這步，不打 confirm-payment；未來付款選擇頁可再接 |
-| **送出成功 → `router.replace` 回 entry detail page** (v0.5) | 009a / 009b | charity `targetType=CHARITY` → `/charities/:targetId`；project → `/donation-projects/:targetId`；sale-item → `/sale-items/:saleItemId`。**用 replace 而非 push** — confirm 頁完成任務後不該留在 history，否則使用者按返回會回到一個「已送出」的死頁面，甚至能再點一次重複送單。失敗時不導頁、只留在 confirm 頁顯示 toast.error 讓使用者重試 |
+| **送出成功 → `router.replace` 回 entry detail page** (v0.5) | 009a / 009b | charity `target.type=CHARITY` → `/charities/${detail.id}`；project → `/donation-projects/${detail.id}`；sale-item → `/sale-items/${item.id}`。**用 replace 而非 push** — confirm 頁完成任務後不該留在 history。失敗時不導頁、只留在 confirm 頁顯示 toast.error 讓使用者重試 |
+| **資料 handoff 走 in-memory draft store**（v0.5 — sheet 寫 / confirm 頁 peek） | 009a / 009b §2.1 | URL 不再帶任何資料（隱私 + UX 一致：refresh / 直接 URL 應該都讓使用者「找不到該頁」）。peek 不 take（Strict Mode safe）；成功 submit 後顯式 clear |
 | **smart back fallback `/`** | 三頁 TopNav 都用 default | direct URL / refresh 後返回鈕回首頁 |
 | **enum / payload / URL 命名一律對齊 backend** (v0.3)：`DonationFrequency` / `BillingDay` / `ReceiptOption` / `OrderSubjectType` 直接沿用 [BE 021 §5 Prisma enum](../../../backend/docs/specs/021-donation-order-data-model.md)；payload field 名（`donorName` / `amountTwd` / `isAnonymous` / `saleItemId` / `quantity` / `note`）直接沿用 [BE 022 §4 body](../../../backend/docs/specs/022-donation-order-api.md) | 009a / 009b / 008b / 008c | 採 Option C 對齊；BFF route handler 收到 FE payload 後可直接 forward 給 BE，**不需 mapping 層**；未來換 BFF / 接金流時 server-side 只需補欄位、不需重新對欄位 |
 
@@ -188,34 +215,56 @@ Sale-item route 同 pattern、body schema 更簡單（無 receiptOption / donati
 
 ---
 
-## 6. 008b/008c 「下一步」要修改的點
-
-> v0.4 — 不變動 sheet handleSubmit 本身（仍是 `router.push` 到 confirm 頁），只是 confirm 頁的「確認送出」改打 BFF 而非 console.log。下面 sheet handler reference 沿用 v0.3 內容：
+## 6. 008b/008c 「下一步」(v0.5 — 寫入 draft store 取代 URL query)
 
 ```ts
-// 008b — DonationSettingsSheet（v0.3 — query params 全用 BE enum）
+// 008b — DonationSettingsSheet
 const handleSubmit = () => {
-  const payload = buildPayload(form, target)  // { target, donationFrequency, billingDay, amountTwd }
-  const params = new URLSearchParams({
-    targetType: payload.target.type,                  // 'CHARITY' | 'DONATION_PROJECT'
-    targetId: payload.target.id,
-    donationFrequency: payload.donationFrequency,      // 'ONE_TIME' | 'RECURRING'
-    ...(payload.billingDay !== null && { billingDay: payload.billingDay }),  // 'DAY_6'|'DAY_16'|'DAY_26'
-    amountTwd: String(payload.amountTwd),
+  setDonationDraft({
+    donationFrequency: form.donationFrequency,
+    ...(form.donationFrequency === 'RECURRING' && form.billingDay
+      && { billingDay: form.billingDay }),
+    amountTwd: form.amount!.value,
+    target: opts.target,                  // { type, detail } — sheet 已從 CtaIsland 收到 full detail
   })
-  router.push(`/checkout/donation?${params.toString()}`)
-  onClose()
+  router.push('/checkout/donation')        // bare path
+  opts.onClose()
 }
 
-// 008c — PurchaseQtySheet（v0.3 — query params 全用 BE 命名）
+// 008c — PurchaseQtySheet
 const handleSubmit = () => {
-  const params = new URLSearchParams({
-    saleItemId: item.id,
-    quantity: String(form.quantity),
-  })
-  router.push(`/checkout/purchase?${params.toString()}`)
-  onClose()
+  setPurchaseDraft({ quantity, item: opts.item })
+  router.push('/checkout/purchase')        // bare path
+  opts.onClose()
 }
+```
+
+sheet 自然需要 CtaIsland 餵更豐富的 target/item（不再只是 id）。CtaIsland prop 升級：
+
+```ts
+type CtaIslandProps = {
+  label: string
+  sticky?: boolean
+} & (
+  | { kind: 'donation'; target:
+        | { type: 'CHARITY'; detail: CharityDetail }
+        | { type: 'DONATION_PROJECT'; detail: DonationDetail }
+    }
+  | { kind: 'purchase'; item: ItemDetail }
+)
+```
+
+詳情頁 caller：
+
+```tsx
+// charities/[id]/page.tsx
+<CtaIsland kind="donation" target={{ type: 'CHARITY', detail: charity }} label="..." />
+
+// donation-projects/[id]/page.tsx
+<CtaIsland kind="donation" target={{ type: 'DONATION_PROJECT', detail: donation }} label="..." sticky />
+
+// sale-items/[id]/page.tsx
+<CtaIsland kind="purchase" item={item} label="..." sticky />
 ```
 
 ---
@@ -224,10 +273,10 @@ const handleSubmit = () => {
 
 - **送出後的下一步**：v0.1 `console.log + toast`。未來接金流 → 信用卡 / Apple Pay / Line Pay 選擇頁；或拉到第三方 redirect（藍新 / 綠界）。三條路線都會改寫 §5 submit handler
 - **ReceiptOption 對應 Figma 顯示**：[BE 022 §4.1](../../../backend/docs/specs/022-donation-order-api.md) 定義 5 個 enum 值（`NONE` / `INDIVIDUAL` / `CORPORATE` / `GOVERNMENT_DONATION` / `DEFER`），但 Figma 4888 只展示 default `都不需要`（= `NONE`），未拉開 dropdown。v0.3 FE 預設提供完整 5 個 option 字串 mapping（見 [009a §5.2](./009a-donation-confirm.md)），未來 design / PM 補完 Figma 後再對齊
-- **匿名捐款的後續影響**：4890「☐ 我要匿名捐款」勾選後是否該禁用姓名欄？BE 端不做 server-side masking（[BE 022 §4.6](../../../backend/docs/specs/022-donation-order-api.md) 一律 echo 原樣 donorName），公開頁面 anonymization 由 UI 端判斷 `isAnonymous` 顯示「匿名捐款者」。預設「勾匿名 → 姓名仍可填、不影響 BE 接受」
+- **匿名捐款的後續影響**：「☐ 我要匿名捐款」（v0.5 三類訂單統一）勾選後是否該禁用姓名欄？BE 端不做 server-side masking（[BE 022 §4.6](../../../backend/docs/specs/022-donation-order-api.md) 一律 echo 原樣 donorName），公開頁面 anonymization 由 UI 端判斷 `isAnonymous` 顯示「匿名捐款者」。預設「勾匿名 → 姓名仍可填、不影響 BE 接受」
 - **電話 / email / 地址欄位**：截圖未拉到底；BE 022 也未含此類欄位（未來物流 / 收據才需要）；FE 不擴
 - **draft id pattern**：URL query 暴露 amountTwd。未來 production 接金流時改 backend 建 draft → URL 帶 draft id；前端 v0.1 不做
-- **isAnonymous 在捐款 (CHARITY / PROJECT) 流程的 UI 缺口**：Figma 4888 / 4889 沒有匿名 checkbox 但 BE 三類訂單共用 `isAnonymous`；FE 在 [009a](./009a-donation-confirm.md) 統一固定送 `false`（對齊 BE optional default）
+- ~~**isAnonymous 在捐款 (CHARITY / PROJECT) 流程的 UI 缺口**：Figma 4888 / 4889 沒有匿名 checkbox 但 BE 三類訂單共用 `isAnonymous`；FE 在 [009a](./009a-donation-confirm.md) 統一固定送 `false`~~ → ✅ v0.5 起 [009a v0.8](./009a-donation-confirm.md) 補 checkbox，跨三類訂單統一
 
 ---
 
@@ -240,3 +289,5 @@ const handleSubmit = () => {
 | 0.3 | 2026-06-15 | **enum / payload / URL 全面對齊 backend spec 021 / 022**（Option C）：(a) §2 routing 兩條 path 對應到 BE 三條 endpoint（charity / project 共用 `/checkout/donation`、sale-item 走 `/checkout/purchase`）；(b) Zod 兩個 query schema 改用 BE enum 值（`CHARITY/DONATION_PROJECT` / `ONE_TIME/RECURRING` / `DAY_6/16/26`）+ `amountTwd` (1〜1_000_000) / `quantity` (1〜100)；(c) §4 共同決策表新增「enum / payload 命名一律對齊 backend」總綱；「下次扣款日期」改為 client display-only、BE create 時 server 算為準；(d) §5 008b/c submit handler 範例同步改用 BE 命名；(e) §6 開放問題對齊 BE 022 已決策的部分（receiptOption 5 值、isAnonymous 不做 server masking、無 server-side phone/email/address）|
 | 0.4 | 2026-06-15 | **接通 BFF → BE**：「確認送出」不再是 `console.log + toast` placeholder，改為 `POST /api/checkout/{donation,purchase}` → BFF Zod 驗 body → strip `_endpoint` → `backendFetch` 對應 BE 022 §4.1/§4.2/§4.3 endpoint → 回 `{ orderId, status }`。brief.md「不接金流」靠 BE 022 §2.3 mock-payment 設計：本期只到 BE 建單成 `PENDING` 這步，不打 `confirm-payment`（留給未來付款選擇頁）。新增 §5 BFF route handler 章節 + §6 sheet handler reference；§4 共同決策「送出」條目改寫；§7 開放問題刪除 `console.log` 相關項。新增檔案：`src/app/api/checkout/donation/route.ts(+test)` / `src/app/api/checkout/purchase/route.ts(+test)` / `src/lib/mock/orders-mock.ts` + 3 個 USE_MOCK dispatcher 註冊；009a / 009b hook 改打 fetch，失敗一律 `toast.error('送出失敗，請稍後再試')` |
 | 0.5 | 2026-06-15 | **送出成功 → router.replace 回 entry detail page**：捐款 charity 來源回 `/charities/:targetId`、project 來源回 `/donation-projects/:targetId`、sale-item 來源回 `/sale-items/:saleItemId`。用 `replace`（非 push）避免使用者按返回回到「已送出」的死頁面或重複送單。失敗不導頁、留在 confirm 頁顯示 toast.error。useDonorInfoForm / useReceiptInfoForm 加 `useRouter()`；hook test 新增「成功後 router.replace 被叫」斷言、「失敗不導頁」斷言；spec 009 §4 共同決策表新增此條 |
+| 0.5 | 2026-06-15 | **URL query → in-memory draft store**（資安 / UX）：confirm 頁 URL 不再帶 `targetType/amountTwd/...`。新增 `donation/draft-store.ts` + `purchase/draft-store.ts`（module 單例：`setX` / `peekX` / `clearX`）。sheet handleSubmit 寫 store + `router.push('/checkout/{donation,purchase}')` bare path。confirm 頁從 RSC（searchParams + RSC fetch detail）改為 RSC shell + `*ConfirmPageEntry.tsx`（client）：`useEffect` peek，**空 → `router.replace('/donation')`**；refresh / 直接 URL / 部署 → JS runtime 重置 → 同樣導回。CtaIsland prop 升級：donation target、purchase item 從 `{type, id}` / `PurchaseItem` 改為攜帶**完整 detail object**（CharityDetail / DonationDetail / ItemDetail）—— confirm 頁不再 fetch、改從 draft 讀。useDonorInfoForm / useReceiptInfoForm opts 從 `{query, target}` / `{query, item}` 收成 `{draft}`；buildPayload 從 draft 讀；submit 成功 `clearXDraft()` 後再 `router.replace(entryUrl(draft))`。§2 routing 章節全部改寫、加 §2.1 draft store 設計；§4 共同決策表加「資料 handoff 走 in-memory draft store」一條；§6 sheet handler reference 同步更新。`DonationCheckoutQuery` / `PurchaseCheckoutQuery` 型別移除（不再從 URL 解析） |
+| 0.6 | 2026-06-15 | **donation flow 也支援匿名**：BFF `/api/checkout/donation` body Zod `isAnonymous` 從 `z.literal(false)` 升為 `z.boolean()`，配合 [009a v0.8](./009a-donation-confirm.md) 把「我要匿名捐款」checkbox 加進 charity / project 確認頁。BE 022 §4.1/§4.2 本來就接受 boolean、無變動。同檔新增 wiring test「isAnonymous=true 也通過 schema」 |

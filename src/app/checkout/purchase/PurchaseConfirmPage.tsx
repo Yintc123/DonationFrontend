@@ -14,23 +14,22 @@ import {
 } from '@/components/ui/DisclaimerBox'
 import { RequiredLabel } from '@/components/ui/RequiredLabel'
 import type { ItemDetail } from '@/lib/schemas/detail'
+import type { PurchaseDraft } from './draft-store'
 import {
   useReceiptInfoForm,
   type Action,
   type FormState,
-  type PurchaseCheckoutQuery,
 } from './useReceiptInfoForm'
 
 type Props = {
-  query: PurchaseCheckoutQuery
-  item: ItemDetail
+  draft: PurchaseDraft
 }
 
 const priceFmt = new Intl.NumberFormat('zh-TW')
 
-export function PurchaseConfirmPage({ query, item }: Props) {
+export function PurchaseConfirmPage({ draft }: Props) {
   const { form, dispatch, isValid, subtotal, shipping, total, handleSubmit } =
-    useReceiptInfoForm({ query, item })
+    useReceiptInfoForm({ draft })
   return (
     <ConfirmPageShell
       title="確認捐款資訊"
@@ -39,8 +38,8 @@ export function PurchaseConfirmPage({ query, item }: Props) {
       onSubmit={handleSubmit}
     >
       <PurchaseDetailPanel
-        item={item}
-        quantity={query.quantity}
+        item={draft.item}
+        quantity={draft.quantity}
         subtotal={subtotal}
         shipping={shipping}
         total={total}

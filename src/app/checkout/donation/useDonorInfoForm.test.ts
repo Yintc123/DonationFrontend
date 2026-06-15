@@ -46,49 +46,41 @@ function mockFetchThrow() {
 }
 
 import type { CharityDetail, DonationDetail } from '@/lib/schemas/detail'
+import type { DonationDraft } from './draft-store'
 import {
   DEFAULT_FORM,
   reducer,
   RECEIPT_OPTIONS,
   useDonorInfoForm,
-  type DonationCheckoutQuery,
   type ReceiptOption,
 } from './useDonorInfoForm'
 
 const CHARITY_ID = '00000000-0000-4000-8000-000000000001'
 
-const CHARITY_TARGET: CharityDetail = {
+const CHARITY: CharityDetail = {
   id: CHARITY_ID,
   name: 'ACC 中華耆幼關懷協會',
   description: 'desc',
-  contactPhone: undefined,
-  contactEmail: undefined,
-  officialWebsite: undefined,
-  approvalNo: undefined,
   categories: [],
 }
 
-const PROJECT_TARGET: DonationDetail = {
+const PROJECT: DonationDetail = {
   id: CHARITY_ID,
   name: '偏鄉AI 數位學習計畫',
   description: 'd',
   content: 'content',
-  raisingApprovalNo: undefined,
-  reliefApprovalNo: undefined,
-  coverImageUrl: undefined,
-  charity: {
-    id: '00000000-0000-4000-8000-0000000000aa',
-    name: '主辦團體 X',
-  },
+  charity: { id: '00000000-0000-4000-8000-0000000000aa', name: '主辦團體 X' },
   categories: [],
 }
 
-const VALID_QUERY: DonationCheckoutQuery = {
-  targetType: 'CHARITY',
-  targetId: CHARITY_ID,
+// v0.7 — opts collapsed from { query, target } → { draft } from the
+// in-memory store. Each test composes the draft it needs from these
+// helpers; H8 builds an ONE_TIME variant inline.
+const VALID_DRAFT: DonationDraft = {
   donationFrequency: 'RECURRING',
   billingDay: 'DAY_16',
   amountTwd: 500,
+  target: { type: 'CHARITY', detail: CHARITY },
 }
 
 beforeEach(() => {
@@ -116,6 +108,33 @@ describe('reducer (pure)', () => {
     const next = reducer(seeded, { type: 'SET_DONOR_NAME', value: '' })
     expect(next.donorName).toBe('')
   })
+  it('R4 (v0.8): SET_ANONYMOUS true → state.isAnonymous=true、其他欄位不變', () => {
+    const seeded = reducer(DEFAULT_FORM, {
+      type: 'SET_DONOR_NAME',
+      value: 'Alice',
+    })
+    const next = reducer(seeded, { type: 'SET_ANONYMOUS', value: true })
+    expect(next.isAnonymous).toBe(true)
+    expect(next.donorName).toBe('Alice')
+    expect(next.receiptOption).toBeNull()    // v0.9 — 預設無收據選項
+  })
+  it('R5 (v0.8): DEFAULT_FORM.isAnonymous=false', () => {
+    expect(DEFAULT_FORM.isAnonymous).toBe(false)
+  })
+  it('R6 (v0.9): DEFAULT_FORM.receiptOption=null（未選）', () => {
+    expect(DEFAULT_FORM.receiptOption).toBeNull()
+  })
+  it('R7 (v0.9): SET_RECEIPT_OPTION null → state.receiptOption 回 null（使用者改回未選）', () => {
+    const seeded = reducer(DEFAULT_FORM, {
+      type: 'SET_RECEIPT_OPTION',
+      value: 'INDIVIDUAL',
+    })
+    const next = reducer(seeded, {
+      type: 'SET_RECEIPT_OPTION',
+      value: null,
+    })
+    expect(next.receiptOption).toBeNull()
+  })
 })
 
 describe('RECEIPT_OPTIONS', () => {
@@ -131,45 +150,65 @@ describe('RECEIPT_OPTIONS', () => {
 // ─── H1-H8 hook integration ────────────────────────────────────────
 
 describe('useDonorInfoForm (hook integration)', () => {
-  it('H1: 初始 isValid=false（donorName=""、receiptOption="NONE"）', () => {
+  it('H1: 初始 isValid=false（receiptOption=null、donorName=""）', () => {
     const { result } = renderHook(() =>
-      useDonorInfoForm({ query: VALID_QUERY, target: CHARITY_TARGET }),
+      useDonorInfoForm({ draft: VALID_DRAFT }),
     )
     expect(result.current.form).toEqual(DEFAULT_FORM)
     expect(result.current.isValid).toBe(false)
   })
 
-  it('H2: SET_DONOR_NAME "Alice" → isValid=true', () => {
+  it('H2 (v0.9): SET_DONOR_NAME 但 receiptOption 仍 null → isValid=false', () => {
     const { result } = renderHook(() =>
-      useDonorInfoForm({ query: VALID_QUERY, target: CHARITY_TARGET }),
+      useDonorInfoForm({ draft: VALID_DRAFT }),
     )
     act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'Alice' }))
+    expect(result.current.isValid).toBe(false)
+  })
+
+  it('H2b (v0.9): SET_RECEIPT_OPTION + SET_DONOR_NAME → isValid=true', () => {
+    const { result } = renderHook(() =>
+      useDonorInfoForm({ draft: VALID_DRAFT }),
+    )
+    act(() => {
+      result.current.dispatch({ type: 'SET_RECEIPT_OPTION', value: 'NONE' })
+      result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'Alice' })
+    })
     expect(result.current.isValid).toBe(true)
   })
 
-  it('H3: SET_DONOR_NAME "   " → isValid=false（trim 後空）', () => {
+  it('H3: SET_DONOR_NAME "   " → isValid=false（trim 後空，即使 receiptOption 已選）', () => {
     const { result } = renderHook(() =>
-      useDonorInfoForm({ query: VALID_QUERY, target: CHARITY_TARGET }),
+      useDonorInfoForm({ draft: VALID_DRAFT }),
     )
-    act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: '   ' }))
+    act(() => {
+      result.current.dispatch({ type: 'SET_RECEIPT_OPTION', value: 'NONE' })
+      result.current.dispatch({ type: 'SET_DONOR_NAME', value: '   ' })
+    })
     expect(result.current.isValid).toBe(false)
   })
 
   it('H4: SET_DONOR_NAME 121 字 → isValid=false（BE 1-120 上限）', () => {
     const { result } = renderHook(() =>
-      useDonorInfoForm({ query: VALID_QUERY, target: CHARITY_TARGET }),
+      useDonorInfoForm({ draft: VALID_DRAFT }),
     )
     const tooLong = 'a'.repeat(121)
-    act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: tooLong }))
+    act(() => {
+      result.current.dispatch({ type: 'SET_RECEIPT_OPTION', value: 'NONE' })
+      result.current.dispatch({ type: 'SET_DONOR_NAME', value: tooLong })
+    })
     expect(result.current.isValid).toBe(false)
   })
 
   it('H5: handleSubmit (CHARITY, BFF 200) → fetch POST /api/checkout/donation + body 對齊 BE 022 §4.1 + toast.success', async () => {
     mockFetchOk()
     const { result } = renderHook(() =>
-      useDonorInfoForm({ query: VALID_QUERY, target: CHARITY_TARGET }),
+      useDonorInfoForm({ draft: VALID_DRAFT }),
     )
-    act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: ' Alice ' }))
+    act(() => {
+      result.current.dispatch({ type: 'SET_RECEIPT_OPTION', value: 'NONE' })
+      result.current.dispatch({ type: 'SET_DONOR_NAME', value: ' Alice ' })
+    })
     await act(async () => {
       await result.current.handleSubmit()
     })
@@ -183,7 +222,7 @@ describe('useDonorInfoForm (hook integration)', () => {
     expect(payload.charityId).toBe(CHARITY_ID)
     expect(payload.donorName).toBe('Alice')                    // trimmed
     expect(payload.isAnonymous).toBe(false)
-    expect(payload.receiptOption).toBe('NONE')                  // default
+    expect(payload.receiptOption).toBe('NONE')                  // dispatched above
     expect(payload.donationFrequency).toBe('RECURRING')
     expect(payload.billingDay).toBe('DAY_16')
     expect(payload.amountTwd).toBe(500)
@@ -196,14 +235,19 @@ describe('useDonorInfoForm (hook integration)', () => {
 
   it('H6: handleSubmit (DONATION_PROJECT) → payload._endpoint = project-donation + donationProjectId + 導回 /donation-projects/:id', async () => {
     mockFetchOk()
-    const projectQuery: DonationCheckoutQuery = {
-      ...VALID_QUERY,
-      targetType: 'DONATION_PROJECT',
+    const projectDraft: DonationDraft = {
+      donationFrequency: 'RECURRING',
+      billingDay: 'DAY_16',
+      amountTwd: 500,
+      target: { type: 'DONATION_PROJECT', detail: PROJECT },
     }
     const { result } = renderHook(() =>
-      useDonorInfoForm({ query: projectQuery, target: PROJECT_TARGET }),
+      useDonorInfoForm({ draft: projectDraft }),
     )
-    act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'Bob' }))
+    act(() => {
+      result.current.dispatch({ type: 'SET_RECEIPT_OPTION', value: 'NONE' })
+      result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'Bob' })
+    })
     await act(async () => {
       await result.current.handleSubmit()
     })
@@ -219,7 +263,7 @@ describe('useDonorInfoForm (hook integration)', () => {
 
   it('H7: handleSubmit (!isValid) → fetch 不被叫、toast 不被叫', async () => {
     const { result } = renderHook(() =>
-      useDonorInfoForm({ query: VALID_QUERY, target: CHARITY_TARGET }),
+      useDonorInfoForm({ draft: VALID_DRAFT }),
     )
     await act(async () => {
       await result.current.handleSubmit()
@@ -231,16 +275,18 @@ describe('useDonorInfoForm (hook integration)', () => {
 
   it('H8: donationFrequency=ONE_TIME → payload 不含 billingDay 欄位（BE 規約）', async () => {
     mockFetchOk()
-    const oneTimeQuery: DonationCheckoutQuery = {
-      targetType: 'CHARITY',
-      targetId: CHARITY_ID,
+    const oneTimeDraft: DonationDraft = {
       donationFrequency: 'ONE_TIME',
       amountTwd: 1000,
+      target: { type: 'CHARITY', detail: CHARITY },
     }
     const { result } = renderHook(() =>
-      useDonorInfoForm({ query: oneTimeQuery, target: CHARITY_TARGET }),
+      useDonorInfoForm({ draft: oneTimeDraft }),
     )
-    act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'C' }))
+    act(() => {
+      result.current.dispatch({ type: 'SET_RECEIPT_OPTION', value: 'NONE' })
+      result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'C' })
+    })
     await act(async () => {
       await result.current.handleSubmit()
     })
@@ -253,9 +299,12 @@ describe('useDonorInfoForm (hook integration)', () => {
   it('H9 (v0.5): BFF 5xx → toast.error「送出失敗」，toast.success 不被叫', async () => {
     mockFetchError(500)
     const { result } = renderHook(() =>
-      useDonorInfoForm({ query: VALID_QUERY, target: CHARITY_TARGET }),
+      useDonorInfoForm({ draft: VALID_DRAFT }),
     )
-    act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'A' }))
+    act(() => {
+      result.current.dispatch({ type: 'SET_RECEIPT_OPTION', value: 'NONE' })
+      result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'A' })
+    })
     await act(async () => {
       await result.current.handleSubmit()
     })
@@ -265,12 +314,33 @@ describe('useDonorInfoForm (hook integration)', () => {
     expect(routerReplaceMock).not.toHaveBeenCalled()
   })
 
+  it('H11 (v0.8): 勾匿名 + submit → payload.isAnonymous=true', async () => {
+    mockFetchOk()
+    const { result } = renderHook(() =>
+      useDonorInfoForm({ draft: VALID_DRAFT }),
+    )
+    act(() => {
+      result.current.dispatch({ type: 'SET_RECEIPT_OPTION', value: 'NONE' })
+      result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'A' })
+      result.current.dispatch({ type: 'SET_ANONYMOUS', value: true })
+    })
+    await act(async () => {
+      await result.current.handleSubmit()
+    })
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const payload = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(payload.isAnonymous).toBe(true)
+  })
+
   it('H10 (v0.5): fetch 拋 network 錯 → 同樣 toast.error', async () => {
     mockFetchThrow()
     const { result } = renderHook(() =>
-      useDonorInfoForm({ query: VALID_QUERY, target: CHARITY_TARGET }),
+      useDonorInfoForm({ draft: VALID_DRAFT }),
     )
-    act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'A' }))
+    act(() => {
+      result.current.dispatch({ type: 'SET_RECEIPT_OPTION', value: 'NONE' })
+      result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'A' })
+    })
     await act(async () => {
       await result.current.handleSubmit()
     })
