@@ -127,6 +127,9 @@ export function CharityListShell({
 
   return (
     <div className="min-h-dvh bg-surface-page flex flex-col">
+      {/* Spec 005 §4 — TopNav 預設用 useSmartBack：
+          站內動過 → router.back()；否則 router.push('/')（fallback 預設 /）。
+          不再手動傳 onBack。 */}
       <TopNav title="所有捐款項目" />
       <main className="mx-auto w-full max-w-[480px] md:max-w-3xl lg:max-w-5xl flex-1 flex flex-col">
         {isSearching ? (

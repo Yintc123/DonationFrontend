@@ -1,7 +1,34 @@
 import { test, expect } from '@playwright/test'
 
-test('/ redirects to /donation and renders 所有捐款項目 TopNav', async ({ page }) => {
+test('/donation 直接訪問按返回 → 跳 /（spec 005 §4 smart back fallback）', async ({ page }) => {
+  // 直接訪問 /donation（站內無 nav 紀錄），useSmartBack 走 fallback 路徑 → push('/')。
+  await page.goto('/donation')
+  await expect(page.getByRole('heading', { level: 1, name: '所有捐款項目' })).toBeVisible()
+  await page.getByRole('button', { name: '返回' }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'JKODonation' })).toBeVisible()
+})
+
+test('/ → 我不想登入 → /donation 按返回 → 回 /（spec 005 §4 smart back via router.back）', async ({ page }) => {
+  // 站內 nav 過一次（usePathname 變動），useSmartBack 走 router.back() 路徑。
   await page.goto('/')
+  await page.getByRole('link', { name: '我不想登入' }).click()
+  await expect(page).toHaveURL(/\/donation/)
+  await page.getByRole('button', { name: '返回' }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'JKODonation' })).toBeVisible()
+})
+
+test('/ 顯示登入卡片 + skip link 可進 /donation（spec 005）', async ({ page }) => {
+  await page.goto('/')
+  // 首頁不再 redirect；顯示 JKODonation header + 登入卡 + 「我不想登入」連結
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'JKODonation' })).toBeVisible()
+  await expect(page.getByLabel('帳號')).toBeVisible()
+  await expect(page.getByLabel('密碼')).toBeVisible()
+  await expect(page.getByRole('button', { name: '登入後台' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '建立帳號' })).toBeVisible()
+  await page.getByRole('link', { name: '我不想登入' }).click()
   await expect(page).toHaveURL(/\/donation/)
   await expect(page.getByRole('heading', { level: 1, name: '所有捐款項目' })).toBeVisible()
   await expect(page.getByRole('tab', { name: '公益團體' })).toBeVisible()

@@ -134,6 +134,8 @@ File key：`0kx2Ne2rvndhfVr3uVUwad`
 - **無限滾動規格**：scroll bar 距底剩 5%–10% 觸發向 backend 要下一頁。Per-tab 筆數（mobile 寬度下對應卡片視覺密度）：charity **10 筆**（row 卡）/ donation **5 筆**（16:9 cover）/ item **4 筆**（2 欄 square grid）。**item 因 RWD grid 寬度變化額外分檔**：mobile (<768) **4**、tablet (768–1023, `md:grid-cols-3`) **6**、desktop (≥1024, `lg:grid-cols-4`) **12**，由 `useViewport()`（兩個 matchMedia 對齊 Tailwind `md:` / `lg:`）→ `?viewport=mobile\|tablet\|desktop` → BFF `tabletLimit` / `desktopLimit` 處理 — 詳見 [spec 002 §1.3 v0.6](./specs/002-list-data.md#13-設計決策)
 - **Tab 切換**：URL `?tab=charity|donation|item` 同步，refresh 保留；切到該 tab 才打網路（TanStack `enabled`），cache 保留
 - **Category bottom-sheet modal**：17 options（16 + 全部），3 欄 grid；URL `?category=<key>` 同步
+- **首頁 + 後台 placeholder（v0.9）** — `/` 顯示登入卡（帳號 / 密碼 + 「登入後台」+「建立帳號」）+ skip link 「我不想登入」→ `/donation`；「登入後台」POST `/api/dev/login`（dev only，無需真實帳密驗證）→ `/dashboard`；「建立帳號」→ `/admin`；`/dashboard`、`/admin` 為 placeholder，後台實際功能未開發
+- **Smart back navigation（v0.10）** — TopNav 返回鈕預設用 `useSmartBack`：站內動過 → `router.back()`；首訪 / 外站 / refresh → `router.push(fallback)`（預設 `/`）。靠 `<InAppNavProvider>` 用 `usePathname` diff 追蹤 in-memory，refresh 重置。詳見 [spec 005 §4](./specs/005-homepage-auth.md#4-smart-back-navigation-v02-新增)
 
 **非範圍**
 - 真實金流、會員、捐款流程（詳情頁的「立即捐款」/「直接捐款給團體」CTA **只刻 UI 不接金流**）
@@ -150,4 +152,4 @@ File key：`0kx2Ne2rvndhfVr3uVUwad`
 
 ---
 
-最後更新：2026-06-15（v0.8 — RWD viewport-aware：item 三檔（mobile 4 / tablet 6 / desktop 12），client `useViewport()` 兩個 matchMedia 對齊 Tailwind `md:` / `lg:`，BFF 用 `tabletLimit` / `desktopLimit`；v0.7 per-tab 無限滾動筆數：charity 10 / donation 5 / item 4，對應卡片視覺密度；v0.6 補件 IMG_4875-4883 截圖：3 個詳情頁納入範圍、category 6 → 16 + bottom-sheet modal、三 tab 卡片 layout 差異化、新欄位（聯絡資訊、核准字號、price、coverImage、content）；v0.5 補 filter dropdown 分類規格(M:N + 子表繼承)；v0.4 修正「分享」→「紀錄」對齊 Figma；v0.3 補無限滾動 10 筆 / 5–10% 觸發 + tab URL sync + lazy fetch）
+最後更新：2026-06-15（v0.10 — Smart back navigation：TopNav 預設改 `useSmartBack`，配 `<InAppNavProvider>` pathname diff 追蹤，解掉「直接訪問 URL 後返回鈕無作用」歷史問題；spec 003b v0.3 / 005 §4 v0.2 / navigation-and-state.md §5.2 / 004 §3.2 全部對齊；v0.9 首頁 `/` 改成登入卡 + skip link（取代原本的 `redirect('/donation')`），新增 `/dashboard` / `/admin` placeholder；smoke e2e 同步更新；spec 005 新增；v0.8 RWD viewport-aware：item 三檔（mobile 4 / tablet 6 / desktop 12），client `useViewport()` 兩個 matchMedia 對齊 Tailwind `md:` / `lg:`，BFF 用 `tabletLimit` / `desktopLimit`；v0.7 per-tab 無限滾動筆數：charity 10 / donation 5 / item 4，對應卡片視覺密度；v0.6 補件 IMG_4875-4883 截圖：3 個詳情頁納入範圍、category 6 → 16 + bottom-sheet modal、三 tab 卡片 layout 差異化、新欄位（聯絡資訊、核准字號、price、coverImage、content）；v0.5 補 filter dropdown 分類規格(M:N + 子表繼承)；v0.4 修正「分享」→「紀錄」對齊 Figma；v0.3 補無限滾動 10 筆 / 5–10% 觸發 + tab URL sync + lazy fetch）

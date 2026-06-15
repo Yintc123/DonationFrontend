@@ -1,18 +1,31 @@
 'use client'
 import type { ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+
+import { useSmartBack } from '@/lib/hooks/useSmartBack'
 
 type TopNavProps = {
   title: string
-  /** 自訂返回行為；未傳則預設呼叫 router.back() */
+  /**
+   * 自訂返回行為。未傳時用 `useSmartBack(fallback)`：
+   *  - 站內已動過 → router.back()
+   *  - 直接訪問 / 外站來 / refresh → router.push(fallback)
+   * 詳見 spec 005 §4 + `useSmartBack`.
+   */
   onBack?: () => void
+  /** smart back 的 fallback 目的地，預設 `/`（spec 005 §3 「回首頁」） */
+  fallback?: string
   /** 右側 optional 附件（如詳情頁分享按鈕） */
   accessory?: ReactNode
 }
 
-export function TopNav({ title, onBack, accessory }: TopNavProps) {
-  const router = useRouter()
-  const handleBack = onBack ?? (() => router.back())
+export function TopNav({
+  title,
+  onBack,
+  fallback = '/',
+  accessory,
+}: TopNavProps) {
+  const smartBack = useSmartBack(fallback)
+  const handleBack = onBack ?? smartBack
   return (
     <header className="flex items-center w-full h-11 bg-brand px-[14px]">
       <button

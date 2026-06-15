@@ -122,7 +122,7 @@ export function CharityListShell({
 | Layout 區域 | 規格 |
 |---|---|
 | Page wrapper | `min-h-dvh bg-surface-page flex flex-col`（讓 footer 黏底） |
-| TopNav | 自帶 chrome |
+| TopNav | 自帶 chrome；返回行為走 TopNav v0.3 預設的 `useSmartBack`（[005 §4](./005-homepage-auth.md#4-smart-back-navigation)）—— 站內動過 → `router.back()`；首訪 `/donation` → fallback `/` |
 | Top row（FilterButton + SearchBar） | `px-[15px] pt-[15px] flex items-center gap-3`（對齊 Figma frame `1:2339` 的 layout `5EY9TI`） |
 | CategoryMenu 位置 | **頁面層級渲染**（bottom-sheet modal，自己 `fixed inset-x-0 bottom-0`）；不需 anchor 在 row 內 |
 | TabsRow 上邊距 | `mt-[6px]` |

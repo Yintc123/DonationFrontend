@@ -19,6 +19,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 
+import { InAppNavProvider } from '@/lib/hooks/useInAppNav'
+
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(
     () =>
@@ -33,5 +35,12 @@ export function Providers({ children }: { children: ReactNode }) {
         },
       }),
   )
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  return (
+    <QueryClientProvider client={client}>
+      {/* Spec 005 §4 — tracks in-app navigation so TopNav's smart back can
+          decide between router.back() vs push(fallback). In-memory only;
+          refresh resets on purpose. */}
+      <InAppNavProvider>{children}</InAppNavProvider>
+    </QueryClientProvider>
+  )
 }

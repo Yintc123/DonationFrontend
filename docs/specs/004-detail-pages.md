@@ -76,6 +76,15 @@ src/app/
 
 > 實作：`<Link href="..." replace>` props；無需其他改動。
 
+### 3.2 直接訪問詳情頁 URL 的返回行為（v0.3 新增）
+
+直接打詳情頁 URL（typed / bookmark / external link）或在詳情頁 refresh → 站內無 nav 歷史。原本 TopNav 預設 `router.back()` 會無作用（瀏覽器 history 空），現由 [spec 005 §4 `useSmartBack`](./005-homepage-auth.md#4-smart-back-navigation-v02-新增) 處理：
+
+- 站內動過 → `router.back()`（典型 `list → detail` 動線）
+- 首訪 / 外站 → `router.push('/')`（TopNav 預設 fallback；詳情頁可改傳 `fallback="/donation"` 但目前統一回首頁）
+
+詳情頁 3 條 RSC 完全不需手動 wire，吃 TopNav v0.3 預設即可。
+
 ---
 
 ## 4. BFF Route
@@ -168,3 +177,4 @@ export const SaleItemDetail = Base.extend({
 |---|---|---|
 | 0.1 | 2026-06-14 | 初版：對應 IMG_4876 / 4883 / 4882 補件揭露 |
 | 0.2 | 2026-06-14 | 新增 §3.1 橫向關聯導航 `replace` 策略：詳情頁互鏈用 `<Link href replace>`，按返回必回 list 不會卡到其他詳情頁 |
+| 0.3 | 2026-06-15 | 新增 §3.2 直接訪問詳情頁 URL 的返回行為：透過 [spec 005 §4 smart back](./005-homepage-auth.md#4-smart-back-navigation-v02-新增) 處理（首訪 → push fallback / 站內 nav → router.back），詳情頁本身無需改 |

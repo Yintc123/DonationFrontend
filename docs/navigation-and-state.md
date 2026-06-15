@@ -166,8 +166,9 @@ scroll 還原能準的兩個前提：
 
 ### 5.2 直接開啟詳情頁 URL 後按返回
 
-瀏覽器無上一頁可退 → `router.back()` 無作用（停留原頁）。
-[spec 003b §9](./specs/003b-topnav.md#9-開放問題) 紀錄為已知限制。
+歷史曾為已知限制（瀏覽器無上一頁可退 → `router.back()` 無作用）。**已於 2026-06-15 解決**：TopNav 預設改用 `useSmartBack(fallback)`（[spec 003b v0.3](./specs/003b-topnav.md#10-變更紀錄) / [spec 005 §4](./specs/005-homepage-auth.md#4-smart-back-navigation-v02-新增)）—— 站內動過走 `router.back()`，首訪 / 外站 / 直接 URL 走 `router.push(fallback)`（fallback 預設 `/`）。
+
+關鍵設計：用 in-memory React context（`<InAppNavProvider>` + `usePathname` diff）追蹤本 tab 內是否曾切過 pathname，而**不**用 `document.referrer`（SPA navigation 不重新載入文件、referrer 不更新會誤判）也**不**用 `sessionStorage`（refresh 會被當成 nav 而誤算）。
 
 ### 5.3 Next 16 `cacheComponents: true` 升級可選
 
@@ -181,4 +182,4 @@ scroll 還原能準的兩個前提：
 
 ---
 
-最後更新：2026-06-14
+最後更新：2026-06-15（補 §5.2 「直接 URL 按返回」已透過 `useSmartBack` 解決，連向 spec 005 §4）
