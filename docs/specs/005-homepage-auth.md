@@ -64,10 +64,10 @@
 
 兩頁都是最小可運行 RSC，視覺對齊首頁（brand 紅 header + 內容置中）。功能：
 
-- `/admin`：只顯示「建立帳號功能尚未開發」+ 返回首頁 link
+- `/admin`：placeholder 顯示「建立帳號功能尚未開發」+ 返回首頁 link。**準生產規格見 [spec 007 建立帳號頁](./007-register-page.md)**（UI / BFF route / backend contract 已設計，等 backend `POST /v1/auth/register` 實作後可整批替換 placeholder）
 - `/dashboard`：顯示「歡迎進入後台」+ 提示 session cookie 已建立 + 連到 `/donation` link
 
-> 未來補真實功能（admin 真註冊表單、dashboard 真後台 widget）時，這兩頁直接擴。
+> dashboard 真功能規劃未來再開 spec；admin 規劃已收斂於 007。
 
 ---
 
@@ -175,7 +175,7 @@ export function useSmartBack(fallback: string = '/'): () => void {
 
 ## 6. 開放問題
 
-- **真實註冊 / 登入流程**：`/admin` 想接真註冊表單時要決定 `POST /api/auth/register` shape（backend 目前無此 endpoint）；本 spec 範圍只到 placeholder
+- ~~**真實註冊 / 登入流程**：`/admin` 想接真註冊表單時要決定 `POST /api/auth/register` shape（backend 目前無此 endpoint）；本 spec 範圍只到 placeholder~~ → ✅ 已於 [spec 007](./007-register-page.md) 收斂（UI / BFF / backend contract 全套），等 backend 實作即可替換
 - **session 過期**：dashboard 沒做 session check；現在進 `/dashboard` 不會驗證 cookie 是否還有效。可加 RSC `await getSessionService().get()` → 沒 session 就 `redirect('/')`
 - **登入後 redirect 來源**：目前固定跳 `/dashboard`；如果想做「登入前嘗試訪問 X 頁，登入後跳回 X」，需要在 query 帶 `?next=`
 - **「我不想登入」UX**：底線連結比較像「skip link」風格；若評審覺得需要更明顯的「訪客模式」按鈕，可改成 outline button
