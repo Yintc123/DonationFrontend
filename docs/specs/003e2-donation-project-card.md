@@ -59,7 +59,7 @@ type DonationProjectCardProps = { item: Donation }
 
 | 元素 | Tag | className |
 |---|---|---|
-| Container（`<Link>`） | `<article>` 外、`<Link>` 內 | `<article>` `bg-surface-card rounded-xl overflow-hidden shadow-sm hover:shadow-md`<br>`<Link>` `flex flex-col w-full max-w-[345px] mx-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand rounded-xl` |
+| Container（`<Link>`） | `<article>` 外、`<Link>` 內 | `<article>` `bg-surface-card rounded-xl overflow-hidden shadow-sm hover:shadow-md`<br>`<Link>` `flex flex-col w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand rounded-xl`（v0.4 — 拿掉 `max-w-[345px] mx-auto`；欄寬 > 345px 時 article 白底兩側會露出空白邊，現改為 `w-full` 跟 [003e3 SaleItemCard](./003e3-sale-item-card.md) 一致） |
 | Image wrap | `<div>` | `relative w-full aspect-[16/9]` |
 | Cover image | `<img>` | `w-full h-full object-cover`；src 由 [003e4 `useImageWithFallback`](./003e4-image-fallback.md#31-useimagewithfallbackprimary-fallback) 決定（缺/載入失敗 → 本地 mock SVG） |
 | **CharityName overlay** | `<div>` | `absolute inset-x-0 bottom-0 bg-brand-overlay text-white text-[13px] leading-5 px-3 py-1 truncate` |
@@ -204,3 +204,4 @@ return (
 | 0.1 | 2026-06-14 | 初版：誤判 charityName 為圖片下方淺色 banner（`bg-brand-soft`） |
 | 0.2 | 2026-06-14 | 截圖 IMG_4875 重新判讀：charityName 是**圖片底部紅色半透明 overlay 白字**；banner 規格改為 `absolute inset-x-0 bottom-0 bg-brand-overlay text-white`；補 `+N` chip 完整渲染規則與文字（純 `+{N}`）；補 HeartGlyph category chip 前置 icon；補完整 13 個測試案例；撤回 `bg-brand-soft`（[003a v0.3](./003a-design-system.md#9-變更紀錄)） |
 | 0.3 | 2026-06-14 | cover image fallback 由「conditional `<div>` + HeartGlyph」改為「`<img>` 永遠渲染、src 由 [003e4 `useImageWithFallback`](./003e4-image-fallback.md) 切到本地 mock SVG」；移除 `useState(imgFailed)` + conditional render，hook 封裝；測試 #2 拆 2a / 2b 涵蓋缺值與 onError 兩條路徑 |
+| 0.4 | 2026-06-15 | `<Link>` 移除 `max-w-[345px] mx-auto`，改用 `w-full`：欄寬大於 345 時 `<article>` 白底兩側會露出空白邊（mobile main `max-w-[480px]` 1 欄、tablet `md:max-w-3xl` 2 欄都會打到），改成跟 [003e3 SaleItemCard](./003e3-sale-item-card.md) 一致的 `w-full` 後填滿欄寬、白邊消失。直機 mobile (< 360px) 行為不變（原 max-w 本就沒生效）。[003e1 CharityCard](./003e1-charity-card.md) 維持 `max-w-[345px]` 不動（row 卡 logo 固定 64×64，白邊視覺較不刺眼） |

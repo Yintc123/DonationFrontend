@@ -33,7 +33,7 @@ export function DonationProjectCard({ item }: DonationProjectCardProps) {
     <article className="bg-surface-card rounded-xl overflow-hidden shadow-sm hover:shadow-md">
       <Link
         href={`/donation-projects/${item.id}`}
-        className="flex flex-col w-full max-w-[345px] mx-auto
+        className="flex flex-col w-full
                    focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand
                    rounded-xl"
       >
