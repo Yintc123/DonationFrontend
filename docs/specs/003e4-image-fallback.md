@@ -1,11 +1,11 @@
 # Spec 003e4：Image Fallback（共用基礎建設）
 
-- **狀態**：Draft（v0.2 — fallback 來源從本地 SVG 池改為 Picsum Photos）
+- **狀態**：Draft（v0.3 — 補 §1.1 圖片資料來源表）
 - **路徑**：
   - `src/components/ui/useImageWithFallback.ts`
   - `src/lib/mock/fallback-images.ts`
 - **依賴**：[003e Cards (index)](./003e-charity-card.md)、[003e2](./003e2-donation-project-card.md)、[003e3](./003e3-sale-item-card.md)
-- **建立日期**：2026-06-14（v0.1）/ 2026-06-15（v0.2）
+- **建立日期**：2026-06-14（v0.1）/ 2026-06-15（v0.2、v0.3）
 
 ---
 
@@ -20,6 +20,36 @@
 | 公益團體 | **首字母縮寫**（`getCharityInitial`，見 [003e1 §3.1](./003e1-charity-card.md#31-logo--fallback-dom)） | logo 為品牌識別，泛用占位圖反而干擾辨識；首字塊更符合「占位」直覺 |
 | 捐款專案 | **Picsum 真實照片**（16:9） | cover image 為情境圖，缺圖時用真實風景照比抽象漸層更接近真實使用場景 |
 | 義賣商品 | **Picsum 真實照片**（1:1） | product image 缺失時用真實物品照保持卡片視覺品質 |
+
+### 1.1 圖片資料來源（per tab × per mode）
+
+每個 tab 的卡片有兩條圖片路徑：**primary**（backend / fixture 給的 URL）與 **fallback**（primary 缺失或載入失敗時的代替）。primary 的實際來源依 `USE_MOCK` 模式而異。
+
+| Tab | `USE_MOCK=1` primary | `USE_MOCK=0` primary | Primary 失敗 / 缺失時的 fallback |
+|---|---|---|---|
+| 公益團體 (charity) | fixture 不給 `logoUrl` 欄位 → 直接走 fallback | backend → BFF → client `logoUrl`；目前 backend seed 塞 1×1 PNG 到 LocalStack S3 | 首字塊（`getCharityInitial(name)` → `AC` / `財` / `🌱`） |
+| 捐款專案 (donation) | fixture `coverImageUrl: 'https://picsum.photos/seed/donation01..08/640/360'`（picsum 真照片） | backend → BFF → client `coverImageUrl`；部分為 `null`、部分指向 LocalStack S3 placeholder | Picsum seed URL（`pickFallbackImage('donation', id)`，640×360，§3.2） |
+| 義賣商品 (item) | fixture `coverImageUrl: 'https://picsum.photos/seed/item01..08/400/400'`（picsum 真照片） | 同上但 S3 路徑為 `donation/sale-items/<id>/cover.jpg` | Picsum seed URL（`pickFallbackImage('item', id)`，400×400，§3.2） |
+
+**Backend / LocalStack 細節（`USE_MOCK=0`）**
+
+[LocalStack](https://localstack.cloud/) 跑在 docker（container 名 `jko-localstack`），於 `localhost:4566` 模擬 AWS S3。Bucket 名 `local-dev-assets`，URL pattern：
+
+```
+charity : http://localhost:4566/local-dev-assets/donation/charities/<uuid>/logo.png
+donation: http://localhost:4566/local-dev-assets/donation/donation-projects/<uuid>/cover.jpg
+item    : http://localhost:4566/local-dev-assets/donation/sale-items/<uuid>/cover.jpg
+```
+
+Backend seed (`backend/prisma/seed.ts` 的 `uploadAsset()`) 只塞 1×1 placeholder（PNG 71 bytes / JPEG 349 bytes），**不是真圖**。Prod 上線時應替換為真實 CDN / S3 物件（host 換成 `s3.amazonaws.com` 或 CloudFront），URL pattern 不變。
+
+**已知問題 → 詳見 §2.5**：1×1 placeholder 對 `<img>` 是「成功載入」→ `onError` 不觸發 → fallback 不啟動 → 卡片視覺空白。臨時 workaround：
+
+```bash
+docker exec jko-localstack awslocal s3 rm s3://local-dev-assets --recursive
+```
+
+（容器重啟 / `prisma db seed` 會復原 placeholders）
 
 ---
 
@@ -211,3 +241,4 @@ return (
 |---|---|---|
 | 0.1 | 2026-06-14 | 初版：抽出 `useImageWithFallback` + `pickFallbackImage` + 12 張本地 mock SVG（donation 6 / item 6，djb2 hash 池）；charity 維持首字母 fallback |
 | 0.2 | 2026-06-15 | Fallback 來源改 Picsum Photos seed URL（`/seed/<kind>-<id>/W/H`）：視覺品質高 / 無限不撞圖 / 仍 deterministic；移除本地 SVG 池 + `FALLBACK_POOL_SIZE` + hash 函式；補 §2.5 已知不足（1×1 placeholder 不觸發 fallback） |
+| 0.3 | 2026-06-15 | 補 §1.1「圖片資料來源（per tab × per mode）」：列出三 tab 在 `USE_MOCK=1` / `USE_MOCK=0` 下的 primary URL 來源 + fallback 對應、LocalStack S3 URL pattern、placeholder workaround；前面只描述 fallback 策略，缺 primary 來源說明 |
