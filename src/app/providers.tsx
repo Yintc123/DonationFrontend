@@ -16,15 +16,37 @@
 
 'use client'
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
+import { Toaster } from 'sonner'
 
+import {
+  handleGlobalQueryError,
+  handleGlobalQuerySuccess,
+} from '@/lib/errors/globalQueryError'
 import { InAppNavProvider } from '@/lib/hooks/useInAppNav'
 
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(
     () =>
       new QueryClient({
+        // Spec 006 — central error / success interception. 5xx → toast
+        // (handler dedups by stable id); success path dismisses any
+        // lingering "server 維修中" banner. Per-section <InlineError>
+        // still owns the retry UX inside the failed list.
+        queryCache: new QueryCache({
+          onError: handleGlobalQueryError,
+          onSuccess: handleGlobalQuerySuccess,
+        }),
+        mutationCache: new MutationCache({
+          onError: handleGlobalQueryError,
+          onSuccess: handleGlobalQuerySuccess,
+        }),
         defaultOptions: {
           queries: {
             staleTime: 30_000,
@@ -41,6 +63,12 @@ export function Providers({ children }: { children: ReactNode }) {
           decide between router.back() vs push(fallback). In-memory only;
           refresh resets on purpose. */}
       <InAppNavProvider>{children}</InAppNavProvider>
+      {/* Spec 006 — sonner mount; toasts are upserted by stable id so
+          concurrent 5xx requests collapse into one banner. closeButton
+          gives the user an X to dismiss manually; per-toast duration
+          (3s) handles the auto-dismiss path. Position uses sonner default
+          (top-center, ~32px from top). */}
+      <Toaster richColors position="top-center" closeButton />
     </QueryClientProvider>
   )
 }

@@ -21,6 +21,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 
 import type { CategoryKey } from '@/lib/schemas/categories'
+import { HttpClientError } from '@/lib/errors/HttpClientError'
 import {
   type AnyResourceItem,
   RESOURCE_TO_PATH,
@@ -88,7 +89,12 @@ export function useResourceListInfinite(
       })
       const res = await fetch(url, { signal })
       if (!res.ok) {
-        throw new Error(`Failed to fetch ${path}: HTTP ${res.status.toString()}`)
+        // Spec 006 — HttpClientError carries `.status` so the QueryCache
+        // global handler can decide whether to toast (5xx) or stay quiet.
+        throw new HttpClientError(
+          res.status,
+          `Failed to fetch ${path}: HTTP ${res.status.toString()}`,
+        )
       }
       const body = (await res.json()) as BffListEnvelope
       return body.data

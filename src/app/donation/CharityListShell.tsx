@@ -269,8 +269,10 @@ function ListPanel({
   }
 
   if (list.isError) {
+    // Spec 006 §3.5 — error 區塊在 list panel 中 V+H 置中（跟 spinner
+    // 一致），讓全局 5xx toast 在它上方約 5vh 處剛好成對。
     return (
-      <div className="px-[15px] md:px-6 lg:px-8 pt-[15px]">
+      <div className="flex-1 flex items-center justify-center px-[15px] md:px-6 lg:px-8">
         <InlineError
           message="載入失敗,請稍候再試"
           onRetry={list.refetch}
