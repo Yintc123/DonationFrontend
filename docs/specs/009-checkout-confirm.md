@@ -1,6 +1,6 @@
 # Spec 009：結帳確認頁（捐款 / 購買，index）
 
-- **狀態**：Draft（v0.2 — 抽 [009c shared confirm UI](./009c-shared-confirm-ui.md) primitives，移除 §3 inline className）
+- **狀態**：Draft（v0.3 — query params / Zod schema / payload 全面對齊 [backend spec 021 / 022](../../../backend/docs/specs/022-donation-order-api.md)）
 - **建立日期**：2026-06-15
 - **Figma 對應**：IMG_4888（charity 直捐確認）/ IMG_4889（donation 確認）/ IMG_4890（item 購買確認）
 
@@ -25,41 +25,48 @@ v0.2 抽 009c：009a / 009b 排版高度相同（紅 hero + 白 panel + dl + dis
 
 ## 2. Routing
 
-新增 2 條 client route，**都是 RSC**：
+新增 2 條 client route，**都是 RSC**。URL query 命名一律對齊 [backend 022 §4 body shape](../../../backend/docs/specs/022-donation-order-api.md)：
 
-| Path | 子 spec | Query params |
-|---|---|---|
-| `/checkout/donation` | [009a](./009a-donation-confirm.md) | `targetType` (charity\|donation) / `targetId` (uuid) / `donationType` (monthly\|oneTime) / `chargeDay` (6\|16\|26, 只在 monthly) / `amount` (positive int) |
-| `/checkout/purchase` | [009b](./009b-purchase-confirm.md) | `itemId` (uuid) / `qty` (1–99 int) |
+| Path | 子 spec | Query params | 對應 BE endpoint |
+|---|---|---|---|
+| `/checkout/donation` | [009a](./009a-donation-confirm.md) | `targetType` (`CHARITY`\|`DONATION_PROJECT`) / `targetId` (uuid) / `donationFrequency` (`ONE_TIME`\|`RECURRING`) / `billingDay` (`DAY_6`\|`DAY_16`\|`DAY_26`，只在 RECURRING) / `amountTwd` (int 1〜1_000_000) | `POST /v1/donation/orders/charity-donation` 或 `/project-donation`（依 targetType 分流，由 BFF 路由） |
+| `/checkout/purchase` | [009b](./009b-purchase-confirm.md) | `saleItemId` (uuid) / `quantity` (1〜100 int) | `POST /v1/donation/orders/sale-item-purchase` |
+
+**為何 FE path 2 條對應 BE 3 條 endpoint**：
+
+charity-donation 與 project-donation 兩條 BE endpoint 的 UI 是同一頁（IMG_4888 / 4889 layout 完全相同），FE 用 `targetType` discriminator 在 page-level 區分；BFF 收到 form payload 時依 `targetType` 路由到對應 BE endpoint。SALE_ITEM 因 body shape 顯著不同（無 `donationFrequency` / `billingDay` / `receiptOption`、改帶 `items[]`），FE 才拆獨立 page。
 
 **Payload 為何走 URL query 而非 sessionStorage / context**：
 
 - ✅ refresh-safe（重新整理 / 直接打 URL 都能還原狀態）
 - ✅ 分享 / debug 友善（可貼整條 URL 給同事看）
 - ✅ Next.js RSC `searchParams` 是原生 API
-- ⚠️ URL 露出 amount 等資訊 — demo 階段不敏感；真實金流 production 通常改 draft id pattern（backend 建 draft、URL 只帶 draft id）
+- ⚠️ URL 露出 amountTwd 等資訊 — demo 階段不敏感；真實金流 production 通常改 draft id pattern（backend 建 draft、URL 只帶 draft id）
 
 **Server 端 validation**：
 
-兩條 route 在 RSC 解析 `searchParams` 時用 Zod 驗證；任一欄位不合規 → `notFound()` 顯示 Next 404（避免使用者亂貼 URL 進 broken state）。
+兩條 route 在 RSC 解析 `searchParams` 時用 Zod 驗證；任一欄位不合規 → `notFound()` 顯示 Next 404（避免使用者亂貼 URL 進 broken state）。Zod enum 值與 [BE 022 TypeBox](../../../backend/docs/specs/022-donation-order-api.md) 對齊，使 BFF route handler 接 form 後可直接 forward 給 BE。
 
 ```ts
-// 009a 用：
+// 009a 用（charity / project donation 共用）：
 const DonationCheckoutQuery = z.object({
-  targetType: z.enum(['charity', 'donation']),
+  targetType: z.enum(['CHARITY', 'DONATION_PROJECT']),
   targetId: z.string().uuid(),
-  donationType: z.enum(['monthly', 'oneTime']),
-  chargeDay: z.coerce.number().int().refine((n): n is 6 | 16 | 26 => [6,16,26].includes(n)).optional(),
-  amount: z.coerce.number().int().min(1),
+  donationFrequency: z.enum(['ONE_TIME', 'RECURRING']),
+  billingDay: z.enum(['DAY_6', 'DAY_16', 'DAY_26']).optional(),
+  amountTwd: z.coerce.number().int().min(1).max(1_000_000),
 }).refine(
-  (q) => q.donationType === 'oneTime' || q.chargeDay !== undefined,
-  { message: 'chargeDay required when donationType=monthly' },
+  (q) => q.donationFrequency === 'ONE_TIME' || q.billingDay !== undefined,
+  { message: 'billingDay required when donationFrequency=RECURRING' },
+).refine(
+  (q) => q.donationFrequency !== 'ONE_TIME' || q.billingDay === undefined,
+  { message: 'billingDay must be omitted when donationFrequency=ONE_TIME' },
 )
 
 // 009b 用：
 const PurchaseCheckoutQuery = z.object({
-  itemId: z.string().uuid(),
-  qty: z.coerce.number().int().min(1).max(99),
+  saleItemId: z.string().uuid(),
+  quantity: z.coerce.number().int().min(1).max(100),
 })
 ```
 
@@ -138,9 +145,10 @@ TopNav + 紅 hero + `<form>` + sticky CTA 整套外殼實作於 [`<ConfirmPageSh
 | **RSC 解析 searchParams 並 fetch target / item by id** — 跟 [004 detail RSC 同套路](./004-detail-pages.md) | [009a §3](./009a-donation-confirm.md) / [009b §3](./009b-purchase-confirm.md) | 邏輯一致、reuse 既有 fetcher（fetchCharityDetail / fetchDonationDetail / fetchItemDetail）|
 | **Form state 用 useReducer + raw/parsed 拆兩欄**（對齊 [008b v0.2](./008b-donation-settings-sheet.md)）| 009a / 009b | 兩頁都有 controlled input（姓名、收據抬頭等）需要避免 ghost-reset |
 | **整 form 用 `<form onSubmit>` + button `type="submit"`**（對齊 [008b §4.5](./008b-donation-settings-sheet.md)）| 009a / 009b | Enter / iOS Done 鍵自動 submit、SR friendly |
-| **「下次扣款日期」client-side 計算**（v0.1）| 009a | demo 容忍 client / server 時區誤差；prod 應 server 算 |
+| **「下次扣款日期」client-side 計算**（v0.1）→ **改 client display-only，BE create 時 server 算為準**（v0.3）| 009a | 規約對齊 [BE 021 §7.7 computeNextChargeAt](../../../backend/docs/specs/021-donation-order-data-model.md)（UTC + 嚴格 `<` 當天視為已過）；FE confirm 頁顯示先用同 BE 規則的 client 函式避免 demo 階段顯示與 BE 寫入錯位；接 BE 真打 endpoint 後改用 response `nextChargeAt` 為準 |
 | **送出 = `console.log(payload) + toast.success`** | 009a / 009b | brief.md 不接金流；未來 → `router.push('/checkout/payment/...')` |
 | **smart back fallback `/`** | 三頁 TopNav 都用 default | direct URL / refresh 後返回鈕回首頁 |
+| **enum / payload / URL 命名一律對齊 backend** (v0.3)：`DonationFrequency` / `BillingDay` / `ReceiptOption` / `OrderSubjectType` 直接沿用 [BE 021 §5 Prisma enum](../../../backend/docs/specs/021-donation-order-data-model.md)；payload field 名（`donorName` / `amountTwd` / `isAnonymous` / `saleItemId` / `quantity` / `note`）直接沿用 [BE 022 §4 body](../../../backend/docs/specs/022-donation-order-api.md) | 009a / 009b / 008b / 008c | 採 Option C 對齊；BFF route handler 收到 FE payload 後可直接 forward 給 BE，**不需 mapping 層**；未來換 BFF / 接金流時 server-side 只需補欄位、不需重新對欄位 |
 
 ---
 
@@ -149,25 +157,25 @@ TopNav + 紅 hero + `<form>` + sticky CTA 整套外殼實作於 [`<ConfirmPageSh
 這次新增 009 後，[008b §5.2](./008b-donation-settings-sheet.md) 的 submit handler、[008c §5.2](./008c-purchase-qty-sheet.md) 的 submit handler 從 `console.log + onClose()` 改為 `router.push(...) + onClose()`：
 
 ```ts
-// 008b — DonationSettingsSheet
+// 008b — DonationSettingsSheet（v0.3 — query params 全用 BE enum）
 const handleSubmit = () => {
-  const payload = buildPayload(form, target)  // { target, donationType, chargeDay, amount }
+  const payload = buildPayload(form, target)  // { target, donationFrequency, billingDay, amountTwd }
   const params = new URLSearchParams({
-    targetType: payload.target.type,
+    targetType: payload.target.type,                  // 'CHARITY' | 'DONATION_PROJECT'
     targetId: payload.target.id,
-    donationType: payload.donationType,
-    ...(payload.chargeDay !== null && { chargeDay: String(payload.chargeDay) }),
-    amount: String(payload.amount),
+    donationFrequency: payload.donationFrequency,      // 'ONE_TIME' | 'RECURRING'
+    ...(payload.billingDay !== null && { billingDay: payload.billingDay }),  // 'DAY_6'|'DAY_16'|'DAY_26'
+    amountTwd: String(payload.amountTwd),
   })
   router.push(`/checkout/donation?${params.toString()}`)
   onClose()
 }
 
-// 008c — PurchaseQtySheet
+// 008c — PurchaseQtySheet（v0.3 — query params 全用 BE 命名）
 const handleSubmit = () => {
   const params = new URLSearchParams({
-    itemId: item.id,
-    qty: String(form.qty),
+    saleItemId: item.id,
+    quantity: String(form.quantity),
   })
   router.push(`/checkout/purchase?${params.toString()}`)
   onClose()
@@ -181,10 +189,11 @@ const handleSubmit = () => {
 ## 6. 開放問題（跨 spec）
 
 - **送出後的下一步**：v0.1 `console.log + toast`。未來接金流 → 信用卡 / Apple Pay / Line Pay 選擇頁；或拉到第三方 redirect（藍新 / 綠界）。三條路線都會改寫 §5 submit handler
-- **「都不需要」/「個人」/「公司」等收據選項實際清單**：Figma 4888 只顯示「都不需要」default option，沒展開 dropdown。需要設計 / PM 確認完整選項才知道個人 / 公司是否要展開額外欄位（統編 / 抬頭）
-- **匿名捐款的後續影響**：4890「☐ 我要匿名捐款」勾選後是否該禁用姓名欄？或保留姓名但 backend 不公開？預設 v0.1 假設「勾匿名 → 姓名仍可填但不必填」
-- **電話 / email / 地址欄位**：截圖未拉到底，無法確認下方還有什麼欄位。實作時若 Figma 還有，補進 form schema
-- **draft id pattern**：URL query 暴露 amount。未來 production 接金流時改 backend 建 draft → URL 帶 draft id；前端 v0.1 不做
+- **ReceiptOption 對應 Figma 顯示**：[BE 022 §4.1](../../../backend/docs/specs/022-donation-order-api.md) 定義 5 個 enum 值（`NONE` / `INDIVIDUAL` / `CORPORATE` / `GOVERNMENT_DONATION` / `DEFER`），但 Figma 4888 只展示 default `都不需要`（= `NONE`），未拉開 dropdown。v0.3 FE 預設提供完整 5 個 option 字串 mapping（見 [009a §5.2](./009a-donation-confirm.md)），未來 design / PM 補完 Figma 後再對齊
+- **匿名捐款的後續影響**：4890「☐ 我要匿名捐款」勾選後是否該禁用姓名欄？BE 端不做 server-side masking（[BE 022 §4.6](../../../backend/docs/specs/022-donation-order-api.md) 一律 echo 原樣 donorName），公開頁面 anonymization 由 UI 端判斷 `isAnonymous` 顯示「匿名捐款者」。預設「勾匿名 → 姓名仍可填、不影響 BE 接受」
+- **電話 / email / 地址欄位**：截圖未拉到底；BE 022 也未含此類欄位（未來物流 / 收據才需要）；FE 不擴
+- **draft id pattern**：URL query 暴露 amountTwd。未來 production 接金流時改 backend 建 draft → URL 帶 draft id；前端 v0.1 不做
+- **isAnonymous 在捐款 (CHARITY / PROJECT) 流程的 UI 缺口**：Figma 4888 / 4889 沒有匿名 checkbox 但 BE 三類訂單共用 `isAnonymous`；FE 在 [009a](./009a-donation-confirm.md) 統一固定送 `false`（對齊 BE optional default）
 
 ---
 
@@ -194,3 +203,4 @@ const handleSubmit = () => {
 |---|---|---|
 | 0.1 | 2026-06-15 | 初版：IMG_4888-4890 規劃為「結帳確認頁」family；拆 index + 009a + 009b；定義 routing / Zod query schema / payload contract；shared panel anatomy；列出 008b/c 需配套修改的 submit handler |
 | 0.2 | 2026-06-15 | **抽 [009c shared confirm UI](./009c-shared-confirm-ui.md) primitives**：`<ConfirmPageShell>` / `<ConfirmPanel>` / `<KeyValueList>` / `<DisclaimerBox>` / `<RequiredLabel>` / `<StickyConfirmCta>` 六件；§3 共通 anatomy 從 inline className 改為 primitive reference；新增 §3.0「整頁外殼」與 §3.5「Disclaimer 字串」兩節。對齊 008a BottomSheet「UI primitive vs business form 分 spec」慣例 |
+| 0.3 | 2026-06-15 | **enum / payload / URL 全面對齊 backend spec 021 / 022**（Option C）：(a) §2 routing 兩條 path 對應到 BE 三條 endpoint（charity / project 共用 `/checkout/donation`、sale-item 走 `/checkout/purchase`）；(b) Zod 兩個 query schema 改用 BE enum 值（`CHARITY/DONATION_PROJECT` / `ONE_TIME/RECURRING` / `DAY_6/16/26`）+ `amountTwd` (1〜1_000_000) / `quantity` (1〜100)；(c) §4 共同決策表新增「enum / payload 命名一律對齊 backend」總綱；「下次扣款日期」改為 client display-only、BE create 時 server 算為準；(d) §5 008b/c submit handler 範例同步改用 BE 命名；(e) §6 開放問題對齊 BE 022 已決策的部分（receiptOption 5 值、isAnonymous 不做 server masking、無 server-side phone/email/address）|

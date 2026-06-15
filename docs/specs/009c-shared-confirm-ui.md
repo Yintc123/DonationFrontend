@@ -295,26 +295,26 @@ export function DonationConfirmPage({ query, target }) {
           <KeyValueRow label="捐款專案">{projectName}</KeyValueRow>
           <KeyValueRow label="捐款對象">{charityName}</KeyValueRow>
           <KeyValueRow label="捐款類型">{typeLabel}</KeyValueRow>
-          {query.donationType === 'monthly' && (
+          {query.donationFrequency === 'RECURRING' && (
             <>
-              <KeyValueRow label="扣款週期">每月 {query.chargeDay} 日</KeyValueRow>
+              <KeyValueRow label="扣款週期">每月 {BILLING_DAY_LABEL[query.billingDay!]} 日</KeyValueRow>
               <KeyValueRow label="下次扣款日期">
                 <time dateTime={iso}>{fmtDate(date)}</time>
               </KeyValueRow>
             </>
           )}
           <KeyValueRow label="捐款金額" variant="emphasized">
-            TWD {priceFmt.format(query.amount)}
+            TWD {priceFmt.format(query.amountTwd)}
           </KeyValueRow>
         </KeyValueList>
       </ConfirmPanel>
 
       <ConfirmPanel title="捐款人基本資料">
         <DisclaimerBox className="mb-4">{DISCLAIMER_PLATFORM}</DisclaimerBox>
-        <RequiredLabel htmlFor="receiptType" className="mb-2">收據開立方式</RequiredLabel>
-        <select id="receiptType" .../>
+        <RequiredLabel htmlFor="receiptOption" className="mb-2">收據開立方式</RequiredLabel>
+        <select id="receiptOption" .../>
         <RequiredLabel htmlFor="donorName" className="mt-4 mb-2">捐款人姓名</RequiredLabel>
-        <input id="donorName" .../>
+        <input id="donorName" maxLength={120} .../>
       </ConfirmPanel>
     </ConfirmPageShell>
   )
