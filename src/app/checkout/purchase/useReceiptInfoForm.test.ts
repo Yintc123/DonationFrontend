@@ -1,0 +1,150 @@
+// Spec 009b v0.4 §9 — reducer pure (R1-R3) + hook integration (H1-H7).
+
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+
+const toastSuccessMock = vi.fn()
+vi.mock('sonner', () => ({
+  toast: { success: (...args: unknown[]) => toastSuccessMock(...args) },
+}))
+
+import type { ItemDetail } from '@/lib/schemas/detail'
+import {
+  DEFAULT_FORM,
+  reducer,
+  useReceiptInfoForm,
+  type PurchaseCheckoutQuery,
+} from './useReceiptInfoForm'
+
+const ITEM_ID = '00000000-0000-4000-8000-000000000099'
+
+const ITEM: ItemDetail = {
+  id: ITEM_ID,
+  name: '陸仕私廚 藤椒牛肉麵',
+  description: '760g',
+  content: '',
+  priceTwd: 449,
+  charity: { id: 'cha-1', name: '台灣紅絲帶基金會' },
+  categories: [],
+}
+
+const VALID_QUERY: PurchaseCheckoutQuery = {
+  saleItemId: ITEM_ID,
+  quantity: 2,
+}
+
+beforeEach(() => {
+  toastSuccessMock.mockReset()
+})
+
+describe('reducer (pure)', () => {
+  it('R1: SET_DONOR_NAME "Alice"', () => {
+    const next = reducer(DEFAULT_FORM, { type: 'SET_DONOR_NAME', value: 'Alice' })
+    expect(next.donorName).toBe('Alice')
+    expect(next.isAnonymous).toBe(false)
+  })
+  it('R2: SET_ANONYMOUS true → isAnonymous=true，其他欄位不變', () => {
+    const seeded = reducer(DEFAULT_FORM, {
+      type: 'SET_DONOR_NAME',
+      value: 'X',
+    })
+    const next = reducer(seeded, { type: 'SET_ANONYMOUS', value: true })
+    expect(next.isAnonymous).toBe(true)
+    expect(next.donorName).toBe('X')
+  })
+  it('R3: SET_ANONYMOUS true 後 SET_ANONYMOUS false → false', () => {
+    const on = reducer(DEFAULT_FORM, { type: 'SET_ANONYMOUS', value: true })
+    const off = reducer(on, { type: 'SET_ANONYMOUS', value: false })
+    expect(off.isAnonymous).toBe(false)
+  })
+})
+
+describe('useReceiptInfoForm (hook)', () => {
+  it('H1: 初始 isValid=false；subtotal=priceTwd×quantity；shipping=0；total=subtotal', () => {
+    const { result } = renderHook(() =>
+      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+    )
+    expect(result.current.form).toEqual(DEFAULT_FORM)
+    expect(result.current.isValid).toBe(false)
+    expect(result.current.subtotal).toBe(449 * 2)
+    expect(result.current.shipping).toBe(0)
+    expect(result.current.total).toBe(449 * 2)
+  })
+
+  it('H2: SET_DONOR_NAME → isValid=true', () => {
+    const { result } = renderHook(() =>
+      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+    )
+    act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'Alice' }))
+    expect(result.current.isValid).toBe(true)
+  })
+
+  it('H3: SET_ANONYMOUS true → state.isAnonymous=true、isValid 不變（v0.1 規則）', () => {
+    const { result } = renderHook(() =>
+      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+    )
+    act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'A' }))
+    act(() => result.current.dispatch({ type: 'SET_ANONYMOUS', value: true }))
+    expect(result.current.form.isAnonymous).toBe(true)
+    expect(result.current.isValid).toBe(true)
+  })
+
+  it('H4: 121 字 donorName → isValid=false', () => {
+    const { result } = renderHook(() =>
+      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+    )
+    act(() =>
+      result.current.dispatch({
+        type: 'SET_DONOR_NAME',
+        value: 'a'.repeat(121),
+      }),
+    )
+    expect(result.current.isValid).toBe(false)
+  })
+
+  it('H5: handleSubmit (valid) → toast.success + payload shape 對齊 BE 022 §4.3', () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { result } = renderHook(() =>
+      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+    )
+    act(() =>
+      result.current.dispatch({ type: 'SET_DONOR_NAME', value: ' Alice ' }),
+    )
+    act(() => result.current.dispatch({ type: 'SET_ANONYMOUS', value: true }))
+    act(() => result.current.handleSubmit())
+
+    expect(toastSuccessMock).toHaveBeenCalledTimes(1)
+    const [, payload] = consoleSpy.mock.calls[0] as [string, Record<string, unknown>]
+    expect(payload._endpoint).toBe('/v1/donation/orders/sale-item-purchase')
+    expect(payload.donorName).toBe('Alice')
+    expect(payload.isAnonymous).toBe(true)
+    expect(payload.items).toEqual([{ saleItemId: ITEM_ID, quantity: 2 }])
+    consoleSpy.mockRestore()
+  })
+
+  it('H6: handleSubmit (!isValid) → toast 不被叫', () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { result } = renderHook(() =>
+      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+    )
+    act(() => result.current.handleSubmit())
+    expect(toastSuccessMock).not.toHaveBeenCalled()
+    expect(consoleSpy).not.toHaveBeenCalled()
+    consoleSpy.mockRestore()
+  })
+
+  it('H7: payload 不含 receiptOption / donationFrequency / billingDay / charityId', () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { result } = renderHook(() =>
+      useReceiptInfoForm({ query: VALID_QUERY, item: ITEM }),
+    )
+    act(() => result.current.dispatch({ type: 'SET_DONOR_NAME', value: 'X' }))
+    act(() => result.current.handleSubmit())
+    const [, payload] = consoleSpy.mock.calls[0] as [string, Record<string, unknown>]
+    expect('receiptOption' in payload).toBe(false)
+    expect('donationFrequency' in payload).toBe(false)
+    expect('billingDay' in payload).toBe(false)
+    expect('charityId' in payload).toBe(false)
+    consoleSpy.mockRestore()
+  })
+})
