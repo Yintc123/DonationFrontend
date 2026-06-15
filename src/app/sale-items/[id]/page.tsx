@@ -140,10 +140,11 @@ function CharityChip({
   charity: { id: string; name: string; logoUrl?: string }
 }) {
   return (
-    // replace（非 push）：spec 004 §「橫向關聯導航」— 詳情頁之間切換不堆 history
+    // 預設 push（spec 004 §3.1 v0.3 撤回原本的 lateral nav `replace` 策略）：
+    // 實測 UX「按 1 次返回卻跳過中間頁」反直覺，改回每點一次都堆一個 history entry。
+    // 連鎖橫向導航的代價（A → 看團體 → B → 看團體 → C 要按 3 次返回）實際罕見。
     <Link
       href={`/charities/${charity.id}`}
-      replace
       className="flex items-center justify-between gap-3 p-3 bg-black/5 rounded-xl
                  hover:bg-black/10
                  focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"

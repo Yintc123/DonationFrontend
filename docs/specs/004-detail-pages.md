@@ -1,6 +1,6 @@
 # Spec 004：詳情頁（Detail Pages，index）
 
-- **狀態**：Draft（v0.2 — 新增 §3.1 橫向關聯導航 `replace` 策略）
+- **狀態**：Draft（v0.4 — 撤回 §3.1 lateral nav `replace` 策略，統一改用 push）
 - **建立日期**：2026-06-14
 - **依賴**：
   - [brief §2.5 詳情頁元素](../brief.md#2-設計畫面盤點)
@@ -55,26 +55,34 @@ src/app/
 
 > 統一規範：詳情頁皆為 **Server Component** 預設；RSC `fetch` backend，把 data 傳給內層 client component（CTA、分享 button、展開描述「更多」屬於有 state 的 island）。
 
-### 3.1 橫向關聯導航策略（v0.2 新增）
+### 3.1 橫向關聯導航策略（v0.4：撤回 `replace`，統一用 push）
 
-「往下鑽」(list → 詳情) 與「橫向切換」(詳情 A → 詳情 B 的關聯項目) 兩種行為的 history stack 應採不同策略，達到 UX 最佳：
+所有頁面間的 `<Link>` 一律走 **Next 預設 push**——不論是 list → 詳情，還是詳情 → 詳情的橫向跳轉。每次點擊都堆一個 history entry、按返回逐步退回。
 
-| 連結來源 | 目的地 | 策略 | 為何 |
-|---|---|---|---|
-| list 卡片（[003e1/e2/e3](./003e-charity-card.md)） | 詳情頁 | `push`（Next `<Link>` 預設） | 「進去看」是 forward；返回回 list |
-| 詳情頁 的「查看團體 ›」chip ([004b §4](./004b-donation-project-detail.md#4-元件結構) / [004c §4](./004c-sale-item-detail.md#4-元件結構)) | charity 詳情 | **`replace`**（`<Link href="..." replace>`） | 「換看這個團體」是 lateral，不該堆 history |
-| charity 詳情 →「捐款專案」cross-link ([004a §3](./004a-charity-detail.md#3-資料流)) | 對應 donation/item 詳情 | **`replace`** | 同上 lateral |
-| Sticky CTA「立即捐款」 | （金流外部頁，作業範圍外） | n/a | — |
+| 連結來源 | 目的地 | 策略 |
+|---|---|---|
+| list 卡片（[003e1/e2/e3](./003e-charity-card.md)） | 詳情頁 | `push`（Next `<Link>` 預設） |
+| 詳情頁 的「查看團體 ›」chip ([004b §4](./004b-donation-project-detail.md#4-元件結構) / [004c §4](./004c-sale-item-detail.md#4-元件結構)) | charity 詳情 | `push`（v0.4 改） |
+| charity 詳情 →「捐款專案」cross-link ([004a §3](./004a-charity-detail.md#3-資料流)) | 對應 donation/item 詳情 | `push`（v0.2 文件曾標 replace 但實作未上線；v0.4 與其他統一） |
+| Sticky CTA「立即捐款」 | （金流外部頁，作業範圍外） | n/a |
 
-**為什麼 `replace`：**
-- 不堆 history → 詳情 A 按返回不會卡到詳情 B（user 直觀返回 list）
-- 對齊 Instagram / Twitter / Apple HIG「lateral navigation 不堆 stack」慣例
-- 代價：lose「回上個詳情頁」的能力 — net positive，因為從詳情頁返回的 95% 意圖是「回 list」
+**為何 v0.4 撤回 v0.2 的 `replace` 策略**
 
-**反例（為何不該 `push`）：**
-詳情 A → chip → 詳情 B → chip → 詳情 C → 按 4 次返回才能回 list；其間每按一次都跳到一個「以為已經看完」的詳情頁，違反返回直覺。
+v0.2 引入了「lateral nav 用 `replace`」策略：詳情 A → chip → 詳情 B 不堆 history、返回直接回 list。動機是避免「連看 3 個關聯團體後要按 3 次返回」的反例。
 
-> 實作：`<Link href="..." replace>` props；無需其他改動。
+實測 UX feedback：**單一 lateral 跳轉的「按 1 次返回卻跳過中間頁」反而更反直覺**。使用者明明走過「列表 → A 詳情 → B 詳情」3 個畫面，按返回直接跳到列表會以為「我是不是按到兩次」。
+
+權衡後：
+- **連續多次橫向**（罕見）：原 v0.2 想優化，但實際場景少
+- **單次橫向**（常見）：v0.2 反而違反「按 1 次返回回 1 頁」的直覺
+
+v0.4 結論：簡單一致 > 過度優化。一律 push、每次返回都退一步、TopNav 智慧返回（[spec 005 §4](./005-homepage-auth.md#4-smart-back-navigation-v02-新增)）負責處理「無 history → 回首頁」的邊界。
+
+**反例（v0.2 想避免、但 v0.4 接受）**
+
+詳情 A → chip → 詳情 B → chip → 詳情 C → 按 3 次返回才能回 list。實作上接受這個成本，因為實際使用上極少見（多數使用者只會橫向跳 0–1 次）。
+
+> v0.4 實作：兩個 `<Link href replace>` 拿掉 `replace` 即可（`src/app/donation-projects/[id]/page.tsx` 與 `src/app/sale-items/[id]/page.tsx` 的 `CharityChip`）；e2e `detail.spec.ts` 的「lateral nav」測試斷言反轉為「back 回到 item 詳情」。
 
 ### 3.2 直接訪問詳情頁 URL 的返回行為（v0.3 新增）
 
@@ -178,3 +186,4 @@ export const SaleItemDetail = Base.extend({
 | 0.1 | 2026-06-14 | 初版：對應 IMG_4876 / 4883 / 4882 補件揭露 |
 | 0.2 | 2026-06-14 | 新增 §3.1 橫向關聯導航 `replace` 策略：詳情頁互鏈用 `<Link href replace>`，按返回必回 list 不會卡到其他詳情頁 |
 | 0.3 | 2026-06-15 | 新增 §3.2 直接訪問詳情頁 URL 的返回行為：透過 [spec 005 §4 smart back](./005-homepage-auth.md#4-smart-back-navigation-v02-新增) 處理（首訪 → push fallback / 站內 nav → router.back），詳情頁本身無需改 |
+| 0.4 | 2026-06-15 | 撤回 §3.1 v0.2 的 lateral nav `replace` 策略：實測「按 1 次返回卻跳過中間頁」反直覺，改為所有 `<Link>` 統一 push、每次返回退一步。CharityChip 兩處（donation/item 詳情）拿掉 `replace`；`detail.spec.ts` 的「lateral nav」測試斷言反轉。簡單一致 > 過度優化 |
