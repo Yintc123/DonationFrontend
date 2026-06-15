@@ -43,7 +43,7 @@ describe('DonationProjectCard', () => {
   it('coverImageUrl 缺 → 渲染 mock fallback img（/mock-images/donation/）', () => {
     const { container } = render(<DonationProjectCard item={makeDonation()} />)
     const img = container.querySelector('img')!
-    expect(img.getAttribute('src')).toMatch(/^\/mock-images\/donation\/[1-6]\.svg$/)
+    expect(img.getAttribute('src')).toMatch(/^https:\/\/picsum\.photos\/seed\/donation-/)
   })
 
   it('cover image onError → src 切到 mock fallback', () => {
@@ -54,7 +54,7 @@ describe('DonationProjectCard', () => {
     )
     const img = container.querySelector('img')!
     fireEvent.error(img)
-    expect(img.getAttribute('src')).toMatch(/^\/mock-images\/donation\/[1-6]\.svg$/)
+    expect(img.getAttribute('src')).toMatch(/^https:\/\/picsum\.photos\/seed\/donation-/)
   })
 
   it('charityName 渲染為紅色 overlay（圖片底部 brand-overlay）', () => {

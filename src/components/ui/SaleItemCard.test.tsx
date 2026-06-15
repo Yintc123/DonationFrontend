@@ -44,7 +44,7 @@ describe('SaleItemCard', () => {
   it('coverImageUrl 缺 → 渲染 mock fallback img（/mock-images/item/）', () => {
     const { container } = render(<SaleItemCard item={makeItem()} />)
     const img = container.querySelector('img')!
-    expect(img.getAttribute('src')).toMatch(/^\/mock-images\/item\/[1-6]\.svg$/)
+    expect(img.getAttribute('src')).toMatch(/^https:\/\/picsum\.photos\/seed\/item-/)
   })
 
   it('cover image onError → src 切到 mock fallback', () => {
@@ -55,7 +55,7 @@ describe('SaleItemCard', () => {
     )
     const img = container.querySelector('img')!
     fireEvent.error(img)
-    expect(img.getAttribute('src')).toMatch(/^\/mock-images\/item\/[1-6]\.svg$/)
+    expect(img.getAttribute('src')).toMatch(/^https:\/\/picsum\.photos\/seed\/item-/)
   })
 
   it('ribbon 渲染「公益標籤」白字 brand 紅底', () => {
