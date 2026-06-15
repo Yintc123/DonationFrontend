@@ -66,4 +66,13 @@ describe('TopNav', () => {
     const img = container.querySelector('button img')
     expect(img?.getAttribute('alt')).toBe('')
   })
+
+  // Spec 003b §3 v0.4 — TopNav sticks to viewport top during page scroll.
+  it('sticky top-0 z-30 — 滾動時黏在 viewport 頂端', () => {
+    render(<TopNav title="所有捐款項目" />)
+    const header = screen.getByRole('banner')
+    expect(header.className).toMatch(/\bsticky\b/)
+    expect(header.className).toMatch(/\btop-0\b/)
+    expect(header.className).toMatch(/\bz-30\b/)
+  })
 })

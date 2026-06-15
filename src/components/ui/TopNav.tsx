@@ -27,7 +27,10 @@ export function TopNav({
   const smartBack = useSmartBack(fallback)
   const handleBack = onBack ?? smartBack
   return (
-    <header className="flex items-center w-full h-11 bg-brand px-[14px]">
+    <header
+      className="sticky top-0 z-30 flex items-center w-full h-11
+                 bg-brand px-[14px] pt-[env(safe-area-inset-top)]"
+    >
       <button
         type="button"
         onClick={handleBack}
