@@ -5,7 +5,7 @@
 - **路徑**：
   - `src/app/page.tsx`（首頁 RSC）
   - `src/app/LoginCard.tsx` / `.test.tsx`（登入卡 client component）
-  - `src/app/admin/page.tsx`（建立帳號 placeholder）
+  - `src/app/register/page.tsx`（建立帳號 placeholder；spec 007 v0.2 定義 contract，路徑 v0.4 從 `/admin` 改 `/register`）
   - `src/app/dashboard/page.tsx`（登入後 placeholder）
   - `src/lib/hooks/useInAppNav.tsx` / `.test.tsx`（§4 Context + Provider，v0.2）
   - `src/lib/hooks/useSmartBack.ts` / `.test.tsx`（§4 返回鈕智慧路由，v0.2）
@@ -52,7 +52,7 @@
 | 進入 `/` | RSC 渲染 header + `<LoginCard />` + skip link |
 | 帳號 / 密碼任一空 | 「登入後台」按鈕 `disabled` |
 | 兩欄都有值 + 按「登入後台」 | `POST /api/dev/login` → 200 → `router.push('/dashboard')`；非 200 → 顯示 inline `<p role="alert">登入失敗 (HTTP {code})</p>`、不跳轉 |
-| 按「建立帳號」 | `router.push('/admin')`，**不**打 API |
+| 按「建立帳號」 | `router.push('/register')`，**不**打 API（v0.4 — 從 `/admin` 改為 `/register`） |
 | 按「demo」 | `<Link href="/donation">`，普通 navigate |
 | 登入 in-flight | 按鈕文字「登入中…」、disabled，避免重複送出（`useTransition` 管 isPending） |
 
@@ -60,14 +60,16 @@
 
 ---
 
-## 4. /admin 與 /dashboard placeholder
+## 4. /register 與 /dashboard placeholder（v0.4 — `/admin` → `/register`）
 
 兩頁都是最小可運行 RSC，視覺對齊首頁（brand 紅 header + 內容置中）。功能：
 
-- `/admin`：placeholder 顯示「建立帳號功能尚未開發」+ 返回首頁 link。**準生產規格見 [spec 007 建立帳號頁](./007-register-page.md)**（UI / BFF route / backend contract 已設計，等 backend `POST /v1/auth/register` 實作後可整批替換 placeholder）
+- `/register`：placeholder 顯示「建立帳號功能尚未開發」+ 返回首頁 link。**準生產規格見 [spec 007 建立帳號頁](./007-register-page.md) v0.2**（已對齊 [backend spec 008 v0.6](../../../backend/docs/specs/008-auth-flow-password.md) `POST /auth/register` contract；FE hook / BFF route 待實作）
 - `/dashboard`：顯示「歡迎進入後台」+ 提示 session cookie 已建立 + 連到 `/donation` link
 
-> dashboard 真功能規劃未來再開 spec；admin 規劃已收斂於 007。
+> dashboard 真功能規劃未來再開 spec；register 規劃已收斂於 007。
+>
+> **為何 v0.4 改路徑**：BE spec 008 §10 有 `role=0=ADMIN` 與 `requireAdmin` preHandler 概念。把面向所有使用者的「建立帳號」掛在 `/admin` 會與「ADMIN role 限定區」概念衝突。`/register` 是公開註冊入口；`/admin` 留給未來真正的 admin 後台。
 
 ---
 
@@ -151,7 +153,7 @@ export function useSmartBack(fallback: string = '/'): () => void {
 | 5 | 兩欄都有值 → 登入 enabled | OK |
 | 6 | 登入成功 → POST /api/dev/login + push('/dashboard') | mock fetch 200，assert call args + router push |
 | 7 | 登入失敗 → 顯示 `role="alert"`、不 push | mock fetch 500 |
-| 8 | 「建立帳號」→ push('/admin')、不打 API | OK |
+| 8 | 「建立帳號」→ push('/register')、不打 API（v0.4 — `/admin` → `/register`） | OK |
 
 ### 5.2 e2e（`tests/e2e/smoke.spec.ts`）
 
@@ -175,7 +177,7 @@ export function useSmartBack(fallback: string = '/'): () => void {
 
 ## 6. 開放問題
 
-- ~~**真實註冊 / 登入流程**：`/admin` 想接真註冊表單時要決定 `POST /api/auth/register` shape（backend 目前無此 endpoint）；本 spec 範圍只到 placeholder~~ → ✅ 已於 [spec 007](./007-register-page.md) 收斂（UI / BFF / backend contract 全套），等 backend 實作即可替換
+- ~~**真實註冊 / 登入流程**：`/admin` 想接真註冊表單時要決定 `POST /api/auth/register` shape（backend 目前無此 endpoint）；本 spec 範圍只到 placeholder~~ → ✅ v0.4 起：[spec 007 v0.2](./007-register-page.md) 對齊 [backend spec 008 v0.6](../../../backend/docs/specs/008-auth-flow-password.md) 既有 `POST /auth/register`（**BE 已實作**，不再「未實作」）；路徑也由 `/admin` 改為 `/register` 解 BE `role=ADMIN` 命名衝突。FE hook / BFF route 待補
 - **session 過期**：dashboard 沒做 session check；現在進 `/dashboard` 不會驗證 cookie 是否還有效。可加 RSC `await getSessionService().get()` → 沒 session 就 `redirect('/')`
 - **登入後 redirect 來源**：目前固定跳 `/dashboard`；如果想做「登入前嘗試訪問 X 頁，登入後跳回 X」，需要在 query 帶 `?next=`
 - **「demo」UX**：底線連結比較像「skip link」風格；若評審覺得需要更明顯的「訪客模式」按鈕，可改成 outline button
@@ -189,3 +191,4 @@ export function useSmartBack(fallback: string = '/'): () => void {
 | 0.1 | 2026-06-15 | 初版：`/` 改首頁登入入口（取代 redirect），加 `LoginCard` + `/admin` / `/dashboard` placeholder；smoke e2e 同步改寫 |
 | 0.2 | 2026-06-15 | 新增 §4 Smart Back Navigation：`useInAppNav` Context（pathname diff in-memory tracking）+ `useSmartBack(fallback)` hook；TopNav 預設改用之（[003b v0.3](./003b-topnav.md)）；CharityListShell 拿掉手動 `onBack`；補 §4.4 行為矩陣 + §5.2/§5.3 測試清單 |
 | 0.3 | 2026-06-16 | skip link 文案「我不想登入」→「demo」（更直白表達訪客 / 展示模式；與作業繳交「附 demo 連結」的脈絡更一致）。`src/app/page.tsx`、`tests/e2e/smoke.spec.ts`、`docs/brief.md` §3、本 spec §2 ASCII + §3 行為表 + §4.4 / §6 行文同步 |
+| 0.4 | 2026-06-16 | **`/admin` 路徑 → `/register`**（隨 [spec 007 v0.2](./007-register-page.md) 重寫對齊 [BE spec 008 v0.6](../../../backend/docs/specs/008-auth-flow-password.md)）：原本「建立帳號」placeholder 掛在 `/admin`，與 BE `role=0=ADMIN` 概念衝突（BE 有 `requireAdmin` preHandler）。把公開註冊入口拆到 `/register`，`/admin` 留給未來真正的 admin 後台。`src/app/admin/` 整目錄移到 `src/app/register/`；LoginCard `router.push('/register')` + 對應 component test；spec 005 §1 路徑、§3 行為表、§4 placeholder 章節（標題從「/admin 與 /dashboard」改為「/register 與 /dashboard」+ 新增「為何 v0.4 改路徑」段落）、§5.1 client test row、§6 OQ 同步 |

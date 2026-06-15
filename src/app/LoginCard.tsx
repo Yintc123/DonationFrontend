@@ -9,7 +9,8 @@ import { useRouter } from 'next/navigation'
  * 帶 payload，本機 dev 模式只要 `ENABLE_DEV_LOGIN=1` 就回 session）。
  * 成功 → /dashboard；失敗 → 顯示 inline 錯誤。
  *
- * 「建立帳號」按鈕純前端導航 → /admin（註冊頁 placeholder，未串 API）。
+ * 「建立帳號」按鈕純前端導航 → /register（spec 007 v0.2；目前 placeholder，
+ * spec 已對齊 BE spec 008 v0.6 帳密註冊 contract，待 hook + BFF 實作）。
  */
 export function LoginCard() {
   const router = useRouter()
@@ -87,7 +88,7 @@ export function LoginCard() {
         </button>
         <button
           type="button"
-          onClick={() => router.push('/admin')}
+          onClick={() => router.push('/register')}
           className="h-11 rounded-lg bg-surface-card border border-brand text-brand text-base font-medium leading-6
                      focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand
                      hover:bg-brand/5"

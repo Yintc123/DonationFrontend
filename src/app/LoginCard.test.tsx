@@ -75,12 +75,12 @@ describe('LoginCard', () => {
     expect(routerPushMock).not.toHaveBeenCalled()
   })
 
-  it('「建立帳號」按鈕 → 跳 /admin（不打 API）', () => {
+  it('「建立帳號」按鈕 → 跳 /register（spec 007 v0.2；不打 API）', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     render(<LoginCard />)
     fireEvent.click(screen.getByRole('button', { name: '建立帳號' }))
-    expect(routerPushMock).toHaveBeenCalledWith('/admin')
+    expect(routerPushMock).toHaveBeenCalledWith('/register')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
