@@ -12,7 +12,14 @@ import { toast } from 'sonner'
  *  - share 成功 → 系統 share sheet 本身就是 feedback，不額外 toast
  *  - share 拋 AbortError（使用者取消）→ 靜默（Web Share API 慣例）
  *  - share 拋其他錯 / share 不存在 → fallback 寫剪貼簿 + toast.success「已複製連結」
- *  - 剪貼簿也失敗（或 navigator.clipboard 不存在）→ toast.error「無法分享」
+ *  - 剪貼簿也失敗 + window.isSecureContext=false（純 HTTP 部署）→
+ *    toast.error「HTTP 無法使用分享功能」（指出根因，避免使用者以為 client 壞掉）
+ *  - 剪貼簿也失敗 + window.isSecureContext=true（罕見：老瀏覽器 / iframe 權限）→
+ *    toast.error「無法分享」（通用訊息）
+ *
+ * 為何拆兩種訊息：本機 dev (localhost) 跟 prod (純 HTTP) 行為差很大，使用者回報
+ * 「prod 跳無法分享」時看到精確訊息能直接導向部署問題；見
+ * `docs/tech/secure-context-requirements.md`。
  *
  * 視覺對齊 chevron-left 的 24×24 hit area（Figma IMG_4881 右上角 iOS share icon）。
  */
@@ -65,9 +72,12 @@ export function ShareIconButton({ url, title, text }: ShareIconButtonProps = {})
     const copied = await copyToClipboard(shareUrl)
     if (copied) {
       toast.success('已複製連結')
-    } else {
-      toast.error('無法分享')
+      return
     }
+    // 沒救了：判斷根因 — HTTP 連線（secure context = false）vs 其他原因
+    const isInsecureContext =
+      typeof window !== 'undefined' && window.isSecureContext === false
+    toast.error(isInsecureContext ? 'HTTP 無法使用分享功能' : '無法分享')
   }
 
   return (

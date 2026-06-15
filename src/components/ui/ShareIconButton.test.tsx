@@ -30,6 +30,10 @@ const originalClipboard = Object.getOwnPropertyDescriptor(
   Navigator.prototype,
   'clipboard',
 )
+const originalIsSecureContext = Object.getOwnPropertyDescriptor(
+  window,
+  'isSecureContext',
+)
 
 function installNavigator(mocks: NavMock) {
   Object.defineProperty(navigator, 'share', {
@@ -39,6 +43,14 @@ function installNavigator(mocks: NavMock) {
   })
   Object.defineProperty(navigator, 'clipboard', {
     value: mocks.clipboard,
+    configurable: true,
+    writable: true,
+  })
+}
+
+function setSecureContext(value: boolean) {
+  Object.defineProperty(window, 'isSecureContext', {
+    value,
     configurable: true,
     writable: true,
   })
@@ -62,6 +74,9 @@ afterEach(() => {
   } else {
     // @ts-expect-error — happy-dom navigator doesn't ship clipboard either
     delete navigator.clipboard
+  }
+  if (originalIsSecureContext) {
+    Object.defineProperty(window, 'isSecureContext', originalIsSecureContext)
   }
 })
 
@@ -148,17 +163,28 @@ describe('ShareIconButton', () => {
     expect(toastSuccessMock).toHaveBeenCalledWith('已複製連結')
   })
 
-  it('share + clipboard 都不可用 → toast.error', async () => {
+  it('share + clipboard 都不可用 + isSecureContext=false (HTTP prod) → toast「HTTP 無法使用分享功能」', async () => {
     installNavigator({}) // no share, no clipboard
+    setSecureContext(false)
+    render(<ShareIconButton url="u" />)
+    await userEvent.click(screen.getByRole('button', { name: '分享' }))
+    expect(toastErrorMock).toHaveBeenCalledWith('HTTP 無法使用分享功能')
+    expect(toastSuccessMock).not.toHaveBeenCalled()
+  })
+
+  it('share + clipboard 都不可用 + isSecureContext=true（罕見：老瀏覽器） → toast「無法分享」', async () => {
+    installNavigator({}) // no share, no clipboard
+    setSecureContext(true)
     render(<ShareIconButton url="u" />)
     await userEvent.click(screen.getByRole('button', { name: '分享' }))
     expect(toastErrorMock).toHaveBeenCalledWith('無法分享')
     expect(toastSuccessMock).not.toHaveBeenCalled()
   })
 
-  it('clipboard.writeText 失敗 → toast.error', async () => {
+  it('clipboard.writeText 失敗 + secure context → toast「無法分享」（非 HTTP 問題）', async () => {
     const writeText = vi.fn().mockRejectedValue(new Error('clipboard denied'))
     installNavigator({ clipboard: { writeText } })
+    setSecureContext(true)
     render(<ShareIconButton url="u" />)
     await userEvent.click(screen.getByRole('button', { name: '分享' }))
     expect(toastErrorMock).toHaveBeenCalledWith('無法分享')
