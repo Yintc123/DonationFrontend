@@ -1,6 +1,6 @@
 # Spec 011d：CMS admin UI primitives
 
-- **狀態**：Draft（v0.1 — 從 011a charity admin 抽出 form / list / page-shell 共用件；對齊 009c 慣例）
+- **狀態**：Draft（v0.2 — 與實作對齊：`<AdminTable>` 加 `rowClassName` prop、`<MultiSelectChips>` 選中視覺強化）
 - **建立日期**：2026-06-16
 - **路徑（規劃）**：
   - `src/components/cms/AdminPageShell.tsx` + `.test.tsx`
@@ -651,3 +651,4 @@ export function CharityCreatePage() {
 | 版本 | 日期 | 變更 |
 |---|---|---|
 | 0.1 | 2026-06-16 | 初版：從 [011a charity admin](./011a-cms-charity-admin.md) 抽出 8 個 admin UI primitive：`<AdminPageShell>` (chrome) + `<AdminTable>` (list) + `<FormField>` (label/error wrapper) + `<Input>` / `<Textarea>` / `<NumberInput>` / `<DateTimeInput>` / `<MultiSelectChips>` (5 個 form field)。對齊 009c 「primitive vs business form 分檔」慣例。放 `src/components/cms/` 命名空間，與 `src/components/ui/` 純展示 primitive 區隔。Sort / pagination / ConfirmDialog / ImageUploader / Select-single / BilingualFieldGroup 全列開放問題、待 v0.2+ |
+| 0.2 | 2026-06-16 | **與實作對齊**：(a) **`<AdminTable>` 加 `rowClassName?: (row) => string\|undefined` prop** — 給 caller 為 row 整列著色（lifecycle 狀態 / 重要旗標 etc）；011a list 用來標「已下架」row `text-brand` 紅字。Empty state + caption + cell 行為不變；(b) **`<MultiSelectChips>` 選中態視覺強化** — 從原本 `bg-brand text-white` 加上 `font-medium` + `ring-2 ring-brand/40 ring-offset-1` + `transition-colors`，讓「已選 vs 未選」對比更明顯（11a edit 頁初次打開時 categoryIds 預填的 chip 在多 chip 中能一眼看出）；(c) `<DateTimeInput>` `min-h` 用 `calc(var(--rows)*24px)` 修語法（v0.1 寫成 `min-h-[var(--rows*24px)]` Tailwind 不認）。其他 6 個 primitive API 無變動 |
