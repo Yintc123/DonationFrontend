@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll, beforeAll } from 'vitest'
 import type { SessionStore } from '@/lib/session/store/types'
-import type { StoredSession, TokenPair } from '@/lib/session/types'
+import { Role, type StoredSession, type TokenPair } from '@/lib/session/types'
 
 function makeSession(over: Partial<StoredSession> = {}): StoredSession {
   const now = Date.now()
@@ -11,6 +11,7 @@ function makeSession(over: Partial<StoredSession> = {}): StoredSession {
     refreshToken: 'rt-' + now,
     refreshTokenExpiresAt: now + 600_000,
     user: { id: 'user-1', name: 'Alice' },
+    role: Role.USER,
     csrfToken: 'csrf-' + now,
     createdAt: now,
     ...over,

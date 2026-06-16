@@ -13,10 +13,11 @@ import {
   FRESH_TOKENS_TTL_MS,
   CSRF_TOKEN_BYTES,
 } from '@/lib/api/constants'
-import type { StoredSession, TokenPair } from './types'
+import type { RoleValue, StoredSession, TokenPair } from './types'
 
 export interface CreateSessionInput {
   user: { id: string; name: string }
+  role: RoleValue
   tokens: TokenPair
 }
 
@@ -71,6 +72,7 @@ export const getSessionService = cache((): SessionService => {
         refreshToken: input.tokens.refreshToken,
         refreshTokenExpiresAt: input.tokens.refreshTokenExpiresAt,
         user: input.user,
+        role: input.role,
         csrfToken,
         createdAt: Date.now(),
       }

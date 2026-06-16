@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createFakeCookieStore } from '../../../tests/helpers/cookie-store'
 import { InMemorySessionStore } from './store/in-memory'
-import type { TokenPair, StoredSession } from './types'
+import { Role, type TokenPair, type StoredSession } from './types'
 
 const fakeStore = createFakeCookieStore()
 let sharedStore: InMemorySessionStore = new InMemorySessionStore()
@@ -43,7 +43,7 @@ beforeEach(() => {
 describe('create', () => {
   it('writes store + cookie, returns sessionId + csrfToken', async () => {
     const svc = getSessionService()
-    const { sessionId, csrfToken } = await svc.create({ user: USER, tokens: tokens() })
+    const { sessionId, csrfToken } = await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
 
     expect(sessionId).toMatch(/^[A-Za-z0-9_-]+$/)
     expect(sessionId).toHaveLength(43)
@@ -78,7 +78,7 @@ describe('get', () => {
 
   it('does not slide TTL on read (no mutation, no cookie rewrite)', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
 
     const beforeCookie = fakeStore.get('jko_session')!.value
     // call get a few times
@@ -99,7 +99,7 @@ describe('update', () => {
 
   it('merges patch and preserves untouched fields', async () => {
     const svc = getSessionService()
-    const { csrfToken } = await svc.create({ user: USER, tokens: tokens() })
+    const { csrfToken } = await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     const original = (await svc.get())!
 
     await svc.update({ accessToken: 'new-at', accessTokenExpiresAt: 9999 })
@@ -117,7 +117,7 @@ describe('update', () => {
 describe('destroy', () => {
   it('clears cookie before store', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
 
     const order: string[] = []
     const destroySpy = vi
@@ -149,7 +149,7 @@ describe('destroy', () => {
 
   it('swallows store.destroy failures', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     vi.spyOn(sharedStore, 'destroy').mockRejectedValueOnce(new Error('redis down'))
     await expect(svc.destroy()).resolves.toBeUndefined()
     // Cookie still cleared
@@ -173,7 +173,7 @@ describe('touch', () => {
 
   it('refreshes both layers when session valid', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     const before = fakeStore.get('jko_session')!.value
 
     // Simulate small time passage so iron-session produces a different sealed value
@@ -193,7 +193,7 @@ describe('rotateCsrfToken', () => {
 
   it('replaces csrfToken, leaves other fields intact', async () => {
     const svc = getSessionService()
-    const { csrfToken } = await svc.create({ user: USER, tokens: tokens() })
+    const { csrfToken } = await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     const before = (await svc.get())!
 
     const newToken = await svc.rotateCsrfToken()
@@ -211,7 +211,7 @@ describe('rotateCsrfToken', () => {
 describe('refresh — happy paths', () => {
   it('cached tokens HIT: uses cache, no backend call', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     const fresh = tokens('-fresh')
     await sharedStore.setCachedTokens(USER.id, fresh, 60_000)
 
@@ -226,7 +226,7 @@ describe('refresh — happy paths', () => {
 
   it('lock acquired: hits backend, writes cache, updates session', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
 
     const newTokens = tokens('-new')
     backendFetchMock.mockResolvedValueOnce({ data: newTokens })
@@ -247,7 +247,7 @@ describe('refresh — happy paths', () => {
 describe('refresh — concurrent dedup (critical, §5.2)', () => {
   it('5 parallel refresh() calls hit backend only once', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
 
     const newTokens = tokens('-dedup')
     // backend call takes a measurable amount of time so pollers actually wait
@@ -275,7 +275,7 @@ describe('refresh — concurrent dedup (critical, §5.2)', () => {
 describe('refresh — failure paths', () => {
   it('lock taken + poll timeout → throws BackendUpstreamError', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
 
     // Pre-acquire the lock externally so refresh() falls into poll branch
     const heldToken = await sharedStore.acquireLock(`refresh-lock:${USER.id}`, 30_000)
@@ -286,7 +286,7 @@ describe('refresh — failure paths', () => {
 
   it('backend throws → propagates and releases lock', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     backendFetchMock.mockRejectedValueOnce(new Error('backend 500'))
 
     await expect(svc.refresh()).rejects.toThrow(/backend 500/i)
@@ -301,7 +301,7 @@ describe('refresh — failure paths', () => {
 
   it('backend rejects refresh token (UnauthenticatedError) → destroys local session', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     const { UnauthenticatedError } = await import('@/lib/errors')
     backendFetchMock.mockRejectedValueOnce(
       new UnauthenticatedError('refresh token revoked'),
@@ -318,7 +318,7 @@ describe('refresh — failure paths', () => {
 describe('wasMutated (§5.3)', () => {
   it('false on plain get()', async () => {
     const svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() }) // mutates
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() }) // mutates
     // create another fresh-instance equivalent — re-import? Not necessary.
     // Easier: a brand-new test path.
     expect(svc.wasMutated()).toBe(true) // already mutated by create above
@@ -334,34 +334,34 @@ describe('wasMutated (§5.3)', () => {
   it('true after create / update / destroy / touch / rotateCsrfToken / refresh', async () => {
     // touch
     let svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     expect(svc.wasMutated()).toBe(true)
 
     fakeStore.clear()
     sharedStore = new InMemorySessionStore()
     svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     await svc.update({ accessToken: 'x' })
     expect(svc.wasMutated()).toBe(true)
 
     fakeStore.clear()
     sharedStore = new InMemorySessionStore()
     svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     await svc.touch()
     expect(svc.wasMutated()).toBe(true)
 
     fakeStore.clear()
     sharedStore = new InMemorySessionStore()
     svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     await svc.rotateCsrfToken()
     expect(svc.wasMutated()).toBe(true)
 
     fakeStore.clear()
     sharedStore = new InMemorySessionStore()
     svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     await sharedStore.setCachedTokens(USER.id, tokens('-cached'), 60_000)
     await svc.refresh()
     expect(svc.wasMutated()).toBe(true)
@@ -369,7 +369,7 @@ describe('wasMutated (§5.3)', () => {
     fakeStore.clear()
     sharedStore = new InMemorySessionStore()
     svc = getSessionService()
-    await svc.create({ user: USER, tokens: tokens() })
+    await svc.create({ user: USER, role: Role.USER, tokens: tokens() })
     await svc.destroy()
     expect(svc.wasMutated()).toBe(true)
   })

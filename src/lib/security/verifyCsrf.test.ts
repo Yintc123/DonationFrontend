@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { verifyCsrf } from './verifyCsrf'
 import { CsrfError } from '@/lib/errors/CsrfError'
-import type { StoredSession } from '@/lib/session/types'
+import { Role, type StoredSession } from '@/lib/session/types'
 
 const VALID_TOKEN = 'a'.repeat(43)
 
@@ -14,6 +14,7 @@ function makeSession(csrfToken = VALID_TOKEN): StoredSession {
     refreshToken: 'rt',
     refreshTokenExpiresAt: now + 600_000,
     user: { id: 'u1', name: 'Alice' },
+    role: Role.USER,
     csrfToken,
     createdAt: now,
   }

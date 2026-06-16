@@ -81,8 +81,13 @@ export const POST = createRoute({
     // page always has something to print.
     const name = me.username ?? me.email ?? 'User'
 
+    // Spec 011 §3.4 — BE /me returns `role` (0=ADMIN / 1=USER);
+    // missing → USER by default (fail-closed for admin gate).
+    const role = me.role === 0 ? 0 : 1
+
     const sessionResult = await getSessionService().create({
       user: { id: me.id, name },
+      role,
       tokens: {
         accessToken: tokens.accessToken,
         accessTokenExpiresAt,
@@ -95,7 +100,7 @@ export const POST = createRoute({
       id: me.id,
       name,
       email: me.email,
-      role: me.role ?? 1, // default to USER (1) when /me doesn't return role
+      role,
     }
 
     return new Response(

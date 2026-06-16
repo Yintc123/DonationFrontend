@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { z } from 'zod'
-import type { StoredSession } from '@/lib/session/types'
+import { Role, type StoredSession } from '@/lib/session/types'
 
 const overrides = vi.hoisted(() => ({
   session: null as StoredSession | null,
@@ -30,6 +30,7 @@ function makeSession(over: Partial<StoredSession> = {}): StoredSession {
     refreshToken: 'rt',
     refreshTokenExpiresAt: now + 600_000,
     user: { id: 'u1', name: 'Alice' },
+    role: Role.USER,
     csrfToken: 'csrf-token-' + 'a'.repeat(32),
     createdAt: now,
     ...over,

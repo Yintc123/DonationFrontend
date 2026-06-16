@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { HttpResponse } from 'msw'
 import { mockBackend } from '../../../tests/helpers/backend-mock'
 import { _resetMockRegistry, registerMock } from '@/lib/mock/dispatch'
-import type { StoredSession, TokenPair } from '@/lib/session/types'
+import { Role, type StoredSession, type TokenPair } from '@/lib/session/types'
 
 const overrides = vi.hoisted(() => ({
   useMock: '0' as '0' | '1',
@@ -56,6 +56,7 @@ function makeSession(over: Partial<StoredSession> = {}): StoredSession {
     refreshToken: 'refresh-original',
     refreshTokenExpiresAt: now + 30 * 24 * 60 * 60_000,
     user: { id: 'u1', name: 'Alice' },
+    role: Role.USER,
     csrfToken: 'csrf-' + now,
     createdAt: now,
     ...over,

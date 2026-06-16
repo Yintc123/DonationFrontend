@@ -3,6 +3,7 @@ import { createRoute, okResponse } from '@/lib/api'
 import { DEV_LOGIN_ACCESS_TTL_MS, DEV_LOGIN_REFRESH_TTL_MS } from '@/lib/api/constants'
 import { env } from '@/lib/config'
 import { getSessionService } from '@/lib/session/service'
+import { Role } from '@/lib/session/types'
 import { NotFoundError } from '@/lib/errors/NotFoundError'
 
 const DEV_USER = { id: 'dev-user-1', name: 'Dev User' }
@@ -16,6 +17,10 @@ export const POST = createRoute({
     const now = Date.now()
     const result = await getSessionService().create({
       user: DEV_USER,
+      // Spec 011 §3.4 — dev login lands on the admin role so the CMS
+      // routes are reachable in demo. Real auth flows (OAuth, password)
+      // pass through the account.role from BE.
+      role: Role.ADMIN,
       tokens: {
         accessToken: 'dev-fake-access-token',
         accessTokenExpiresAt: now + DEV_LOGIN_ACCESS_TTL_MS,
