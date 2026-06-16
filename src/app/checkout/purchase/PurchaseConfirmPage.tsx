@@ -17,6 +17,7 @@ import {
   REMINDER_DONOR_NAME,
 } from '@/components/ui/ReminderNote'
 import { RequiredLabel } from '@/components/ui/RequiredLabel'
+import { AnonymousInfoTrigger } from '../AnonymousInfoTrigger'
 import type { ItemDetail } from '@/lib/schemas/detail'
 import type { PurchaseDraft } from './draft-store'
 import {
@@ -135,19 +136,24 @@ function ReceiptInfoFormPanel({
                    focus:border-2 focus:border-ink-AAA focus:outline-none mb-4"
       />
 
-      <label className="flex items-center gap-2 text-sm text-ink-AAA">
-        <input
-          type="checkbox"
-          checked={form.isAnonymous}
-          onChange={(e) =>
-            dispatch({ type: 'SET_ANONYMOUS', value: e.target.checked })
-          }
-          className="w-4 h-4 rounded border-line text-brand
-                     focus-visible:outline focus-visible:outline-2
-                     focus-visible:outline-offset-2 focus-visible:outline-brand"
-        />
-        <span>我要匿名捐款</span>
-      </label>
+      {/* 009d — trigger 是 label 的 sibling、不是 child：避免 button 內嵌
+          在 label 造成 click 冒泡誤觸 checkbox。 */}
+      <div className="flex items-center gap-2 text-sm text-ink-AAA">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={form.isAnonymous}
+            onChange={(e) =>
+              dispatch({ type: 'SET_ANONYMOUS', value: e.target.checked })
+            }
+            className="w-4 h-4 rounded border-line text-brand
+                       focus-visible:outline focus-visible:outline-2
+                       focus-visible:outline-offset-2 focus-visible:outline-brand"
+          />
+          <span>我要匿名捐款</span>
+        </label>
+        <AnonymousInfoTrigger />
+      </div>
 
       <ReminderNote className="mt-4">{REMINDER_DONOR_NAME}</ReminderNote>
     </ConfirmPanel>

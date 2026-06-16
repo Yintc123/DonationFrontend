@@ -310,35 +310,62 @@ InfoDialog primitive 不知道是誰打開它（caller 可能是 button、可能
 
 ## 5. 整合到 009a / 009b
 
-### 5.1 009b（`<ReceiptInfoFormPanel>`）
+### 5.1 結構決定：trigger 是 label 的 **sibling**、不是 child
+
+```tsx
+<div className="flex items-center gap-2 text-sm text-ink-AAA">
+  <label className="flex items-center gap-2">
+    <input type="checkbox" checked={form.isAnonymous} ... />
+    <span>我要匿名捐款</span>
+  </label>
+  <AnonymousInfoTrigger />
+</div>
+```
+
+**為何 trigger 不能放在 label 內**：實作期跑整合測試發現，把 `<button>` 嵌在 `<label>` 內，點 button 會 click-bubble 到 label，連帶觸發底層 `<input type="checkbox">`，造成「按 ⓘ 順便勾匿名」的 bug。把 trigger 拉出 label 變 sibling 即解。
+
+`009b §6.4 v0.4` 原本 reference JSX 把 `<button>` 寫在 label 內是預想沒驗證的設計缺陷；本 spec 落地時改正。
+
+### 5.2 009b（`<ReceiptInfoFormPanel>`）
 
 [009b §6.4 v0.4 reference JSX](./009b-purchase-confirm.md) 已先預留 `<InfoIcon>` 位置（但未實作）：
 
 ```diff
-  <label className="flex items-center gap-2 text-sm text-ink-AAA">
-    <input type="checkbox" checked={form.isAnonymous} ... />
-    <span>我要匿名捐款</span>
--   <button type="button" aria-label="匿名捐款說明"
--           className="text-ink-A hover:text-ink-AAA">
+- <label className="flex items-center gap-2 text-sm text-ink-AAA">
+-   <input type="checkbox" checked={form.isAnonymous} ... />
+-   <span>我要匿名捐款</span>
+-   <button type="button" aria-label="匿名捐款說明" ...>
 -     <InfoIcon className="w-4 h-4" />
 -   </button>
+- </label>
++ <div className="flex items-center gap-2 text-sm text-ink-AAA">
++   <label className="flex items-center gap-2">
++     <input type="checkbox" checked={form.isAnonymous} ... />
++     <span>我要匿名捐款</span>
++   </label>
 +   <AnonymousInfoTrigger />
-  </label>
++ </div>
 ```
 
-### 5.2 009a（`<DonorInfoFormPanel>`）
+### 5.3 009a（`<DonorInfoFormPanel>`）
 
 [009a §5.7 v0.8 reference JSX](./009a-donation-confirm.md) 原本沒有 ⓘ（spec 對齊 IMG_4888 / 4889；IMG_4892 後新增的 ⓘ 也應補上對齊兩頁體驗）：
 
 ```diff
-  <label className="flex items-center gap-2 text-sm text-ink-AAA">
-    <input type="checkbox" checked={form.isAnonymous} ... />
-    <span>我要匿名捐款</span>
+- <label className="flex items-center gap-2 text-sm text-ink-AAA">
+-   <input type="checkbox" checked={form.isAnonymous} ... />
+-   <span>我要匿名捐款</span>
+- </label>
++ <div className="flex items-center gap-2 text-sm text-ink-AAA">
++   <label className="flex items-center gap-2">
++     <input type="checkbox" checked={form.isAnonymous} ... />
++     <span>我要匿名捐款</span>
++   </label>
 +   <AnonymousInfoTrigger />
-  </label>
++ </div>
 ```
 
-### 5.3 兩頁共用同一個 trigger
+### 5.4 兩頁共用同一個 trigger
 
 `<AnonymousInfoTrigger>` 不接 prop，整段 self-contained，**兩頁直接 import 用即可**。文案唯一 source of truth = `ANONYMOUS_INFO_BODY` const。
 
@@ -402,9 +429,9 @@ InfoDialog primitive 不知道是誰打開它（caller 可能是 button、可能
 
 | # | 案例 | 期望 |
 |---|---|---|
-| `anon-info` | 收據選後、checkbox 出現 → 同時也有 `aria-label="什麼是匿名捐款？"` button；點之 → 跳 dialog 顯示 title | 整合 ok |
+| `5d (009d)` | 「我要匿名捐款」checkbox 旁有 `aria-label="什麼是匿名捐款？"` button；點之 → (a) dialog 出現、(b) checkbox 仍未勾 | 整合 ok 且 click 沒誤觸 checkbox（驗證 §5.1 sibling-not-child 設計） |
 
-不重複測 trigger / dialog 內部行為（已在 §7.1 / §7.2 覆蓋），只驗「panel 內確實放了 AnonymousInfoTrigger」。
+不重複測 trigger / dialog 內部行為（已在 §7.1 / §7.2 覆蓋），只驗「panel 內確實放了 AnonymousInfoTrigger」+ 「label DOM 結構正確不漏接 click」。
 
 ---
 

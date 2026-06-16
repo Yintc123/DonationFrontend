@@ -175,6 +175,23 @@ describe('DonationConfirmPage', () => {
     expect(checkbox).toBeChecked()
   })
 
+  it('5d (009d): 選收據後 → 「什麼是匿名捐款？」trigger 出現；點之 → dialog 跳、不誤觸 checkbox', async () => {
+    render(<DonationConfirmPage draft={CHARITY_DRAFT_ONE_TIME} />)
+    await userEvent.selectOptions(
+      screen.getByLabelText(/收據開立方式/),
+      'NONE',
+    )
+    const checkbox = screen.getByRole('checkbox', { name: /匿名捐款/ })
+    const infoTrigger = screen.getByRole('button', {
+      name: '什麼是匿名捐款？',
+    })
+    expect(checkbox).not.toBeChecked()
+    await userEvent.click(infoTrigger)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    // 整合風險：button 嵌在 label 內，click 不該 propagate 觸發 checkbox
+    expect(checkbox).not.toBeChecked()
+  })
+
   it('6 (v0.9): <select> 含 5 個 BE enum + 1 個 placeholder（共 6 options，第一個 disabled）', () => {
     render(<DonationConfirmPage draft={CHARITY_DRAFT_ONE_TIME} />)
     const select = screen.getByLabelText(/收據開立方式/) as HTMLSelectElement

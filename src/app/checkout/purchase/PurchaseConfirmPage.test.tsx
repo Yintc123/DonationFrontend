@@ -100,6 +100,18 @@ describe('PurchaseConfirmPage', () => {
     expect(checkbox).toBeChecked()
   })
 
+  it('5d (009d): 「什麼是匿名捐款？」trigger 點之 → dialog 跳、不誤觸 checkbox', async () => {
+    render(<PurchaseConfirmPage draft={DRAFT_QTY_1} />)
+    const checkbox = screen.getByRole('checkbox', { name: /匿名捐款/ })
+    const infoTrigger = screen.getByRole('button', {
+      name: '什麼是匿名捐款？',
+    })
+    expect(checkbox).not.toBeChecked()
+    await userEvent.click(infoTrigger)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(checkbox).not.toBeChecked()
+  })
+
   it('6: 填齊後送出 → toast.success', async () => {
     render(<PurchaseConfirmPage draft={DRAFT_QTY_1} />)
     await userEvent.type(screen.getByLabelText(/捐款人姓名/), 'Alice')
