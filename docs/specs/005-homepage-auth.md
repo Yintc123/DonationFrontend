@@ -147,6 +147,12 @@ export function useSmartBack(fallback: string = '/'): () => void {
 - `<CharityListShell>` 拿掉手動的 `onBack={() => router.push('/')}`，改用 TopNav 預設
 - 詳細頁 3 條 RSC 完全不需改（已用 default TopNav）
 
+### 4.6 Top-level landing 頁的 escape hatch（v0.3.1）
+
+`<TopNav>` v0.5 加 `backHref?: string` prop，set 時**繞過** smart-back、`router.push(backHref)`。給 top-level landing 頁用（目前 `/donation`、`/cms`）：這些頁面語意上「返回 = 回首頁」、不該依賴 history。例：從 `/cms` 進 `/donation`，smart-back `router.back()` 會回 `/cms`，但 user 預期「返回首頁」，反直覺。
+
+> 詳見 [003b TopNav §1 / §2 / §4](./003b-topnav.md#1-職責)。useSmartBack hook 本身**無變動**；backHref 是 TopNav 在 hook 之上的策略層 escape hatch。
+
 ---
 
 ## 5. 測試

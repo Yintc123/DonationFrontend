@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
+import { TopNav } from '@/components/ui/TopNav'
 import { getSessionService } from '@/lib/session/service'
 
 export const metadata: Metadata = {
@@ -37,11 +38,9 @@ export default async function CmsPage() {
 
   return (
     <div data-component="CmsPage" className="min-h-dvh bg-surface-page flex flex-col">
-      <header className="flex items-center justify-center w-full h-11 bg-brand px-[14px]">
-        <h1 className="text-white text-[17px] font-bold leading-[22px]">
-          後台
-        </h1>
-      </header>
+      {/* CMS 是 top-level landing；返回語意 = 「回首頁」(也順帶可用作登出
+          動線的視覺起點)。用 backHref 強制 push('/')、不依賴 history。 */}
+      <TopNav title="後台" backHref="/" />
       <main className="flex-1 flex flex-col items-center justify-center gap-4 px-[15px] py-10">
         <p className="text-base text-ink-AAA text-center">
           歡迎進入後台，{session.user.name}

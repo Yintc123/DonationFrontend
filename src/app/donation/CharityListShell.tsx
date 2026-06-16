@@ -127,10 +127,10 @@ export function CharityListShell({
 
   return (
     <div data-component="CharityListShell" className="min-h-dvh bg-surface-page flex flex-col">
-      {/* Spec 005 §4 — TopNav 預設用 useSmartBack：
-          站內動過 → router.back()；否則 router.push('/')（fallback 預設 /）。
-          不再手動傳 onBack。 */}
-      <TopNav title="所有捐款項目" />
+      {/* /donation 是 top-level landing；返回語意 = 「回首頁」，不該依賴
+          history 深度（從 /cms 進來時 smart-back 會回 /cms 反而違反預期）。
+          用 backHref 強制 push('/')、繞過 useSmartBack。 */}
+      <TopNav title="所有捐款項目" backHref="/" />
       <main className="mx-auto w-full max-w-[480px] md:max-w-3xl lg:max-w-5xl flex-1 flex flex-col">
         {isSearching ? (
           <>
