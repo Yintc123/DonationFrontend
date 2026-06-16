@@ -202,9 +202,21 @@ describe('GET /api/cms/charities', () => {
       receivedUrl = req.url
       return HttpResponse.json({ items: [], nextCursor: null }, { status: 200 })
     })
-    const res = await GET(getReq('limit=50'), noParams)
+    const res = await GET(getReq('limit=30'), noParams)
     expect(res.status).toBe(200)
     expect(receivedUrl).toContain('/user/v1/donation/charities')
+    expect(receivedUrl).toContain('limit=30')
+  })
+
+  it('admin + requested limit > 50 → cap at 50 (user-side max)', async () => {
+    overrides.session = adminSession()
+    let receivedUrl: string | undefined
+    mockBackend('get', 'http://backend.test/user/v1/donation/charities', (req) => {
+      receivedUrl = req.url
+      return HttpResponse.json({ items: [], nextCursor: null }, { status: 200 })
+    })
+    const res = await GET(getReq('limit=200'), noParams)
+    expect(res.status).toBe(200)
     expect(receivedUrl).toContain('limit=50')
   })
 })

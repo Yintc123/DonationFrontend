@@ -28,14 +28,15 @@ export const POST = createAdminRoute({
 })
 
 // v0.1 fallback — BE 026 admin list endpoint not shipped yet. Forward to
-// the user-side list which returns the public live subset. Switch the URL
-// to `/cms/donation/charities` once BE 026 v0.1 ships; the wire shape only
-// adds admin metadata fields so existing read paths keep working.
+// the user-side list which returns the public live subset. limit capped
+// at 50 (user-side ListQueryBase max); switch the URL to
+// `/cms/donation/charities` once BE 026 v0.1 ships, then bump cap to 100.
 export const GET = createAdminRoute({
   handler: async ({ req, requestId }) => {
     const url = new URL(req.url)
-    const limit = url.searchParams.get('limit') ?? '100'
-    const qs = new URLSearchParams({ limit })
+    const requested = Number(url.searchParams.get('limit') ?? '50')
+    const limit = Math.min(Math.max(1, requested || 50), 50)
+    const qs = new URLSearchParams({ limit: String(limit) })
     const { data } = await backendFetch<unknown>(
       `/user/v1/donation/charities?${qs.toString()}`,
       { requestId },

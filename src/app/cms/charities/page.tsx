@@ -30,10 +30,10 @@ export const metadata: Metadata = {
 async function fetchAdminCharityList(): Promise<CharityListItem[]> {
   // v0.1 fallback: BE 026 admin list endpoint not shipped yet — use the
   // user-side list (returns only `whereLive` rows; admin sees the same
-  // "in-progress" set as users). Switch to `/cms/donation/charities` when
-  // BE 026 v0.1 lands; the wire shape only adds metadata fields.
+  // "in-progress" set as users). limit capped at 50 by BE user-side
+  // ListQueryBase (admin endpoint caps at 100; switch when BE 026 lands).
   const { data } = await backendFetch<unknown>(
-    '/user/v1/donation/charities?limit=100',
+    '/user/v1/donation/charities?limit=50',
   )
   const parsed = ListResponseSchema.safeParse(data)
   if (!parsed.success) {
