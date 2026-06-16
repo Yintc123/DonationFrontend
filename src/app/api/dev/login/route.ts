@@ -14,10 +14,12 @@
 import 'server-only'
 import { createRoute } from '@/lib/api'
 import { backendFetch } from '@/lib/api/backend'
+import { decodeJwtPayload } from '@/lib/auth/decodeJwtPayload'
 import { env } from '@/lib/config'
 import { ContractViolationError } from '@/lib/errors/ContractViolationError'
 import { NotFoundError } from '@/lib/errors/NotFoundError'
 import { getSessionService } from '@/lib/session/service'
+import { Role, type RoleValue } from '@/lib/session/types'
 import {
   BackendMeResponse,
   BackendRegisterResponse as BackendLoginResponse,
@@ -27,6 +29,19 @@ const NO_STORE_HEADERS = {
   'content-type': 'application/json',
   'cache-control': 'no-store, private',
 } as const
+
+function resolveRole(
+  meRole: number | null | undefined,
+  accessToken: string,
+): RoleValue {
+  // /me wins if BE ships role there in a future API rev.
+  if (meRole === Role.ADMIN || meRole === Role.USER) {
+    return meRole
+  }
+  const claims = decodeJwtPayload(accessToken)
+  const claimRole = claims?.role
+  return claimRole === Role.ADMIN ? Role.ADMIN : Role.USER
+}
 
 export const POST = createRoute({
   csrfExempt: true,
@@ -68,11 +83,16 @@ export const POST = createRoute({
     const me = meParsed.data
 
     // Step 3 — session.create with the REAL admin tokens.
+    //
+    // BE /auth/me does NOT return `role` (BE 008 §6.4 — role lives only
+    // in the JWT claims per spec 007 §10.10). Decode the access token to
+    // read it; the response Zod schema accepts `role` as optional so we
+    // fall back to JWT only when BE omits it from /me.
     const now = Date.now()
     const accessTokenExpiresAt = now + tokens.accessExpiresIn * 1000
     const refreshTokenExpiresAt = now + tokens.refreshExpiresIn * 1000
     const name = me.username ?? me.email ?? 'Admin'
-    const role = me.role === 0 ? 0 : 1
+    const role = resolveRole(me.role, tokens.accessToken)
     const user = { id: me.id, name }
 
     const result = await getSessionService().create({

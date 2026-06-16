@@ -62,12 +62,23 @@ function postReq(origin = 'http://localhost:3000'): Request {
 
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad'
 
-function stubBeAuth(role = 0) {
+function jwt(payload: Record<string, unknown>): string {
+  const b64 = (o: unknown) =>
+    Buffer.from(JSON.stringify(o))
+      .toString('base64')
+      .replace(/=+$/, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+  return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`
+}
+
+function stubBeAuth(opts: { roleInJwt?: 0 | 1; roleInMe?: 0 | 1 | null } = {}) {
+  const { roleInJwt = 0, roleInMe = null } = opts
   mockBackend('post', 'http://backend.test/auth/login', () =>
     HttpResponse.json(
       {
-        accessToken: 'real.jwt.access',
-        refreshToken: 'real.jwt.refresh',
+        accessToken: jwt({ sub: ADMIN_ID, type: 'access', role: roleInJwt }),
+        refreshToken: jwt({ sub: ADMIN_ID, type: 'refresh' }),
         accessExpiresIn: 3 * 60 * 60,
         refreshExpiresIn: 30 * 24 * 60 * 60,
         tokenType: 'Bearer',
@@ -75,19 +86,19 @@ function stubBeAuth(role = 0) {
       { status: 200 },
     ),
   )
-  mockBackend('get', 'http://backend.test/auth/me', () =>
-    HttpResponse.json(
-      {
-        id: ADMIN_ID,
-        username: 'admin',
-        email: null,
-        role,
-        createdAt: '2026-06-16T00:00:00.000Z',
-        updatedAt: '2026-06-16T00:00:00.000Z',
-      },
-      { status: 200 },
-    ),
-  )
+  mockBackend('get', 'http://backend.test/auth/me', () => {
+    const body: Record<string, unknown> = {
+      id: ADMIN_ID,
+      username: 'admin',
+      email: null,
+      createdAt: '2026-06-16T00:00:00.000Z',
+      updatedAt: '2026-06-16T00:00:00.000Z',
+    }
+    // BE 008 §6.4 doesn't actually return role; the test default omits it
+    // so the JWT-decode path is the one exercised. Tests can opt-in.
+    if (roleInMe !== null) body.role = roleInMe
+    return HttpResponse.json(body, { status: 200 })
+  })
 }
 
 beforeEach(() => {
@@ -115,10 +126,10 @@ describe('POST /api/dev/login', () => {
     expect(res.status).toBe(404)
   })
 
-  it('happy path → BE /auth/login + /auth/me + session.create(role=ADMIN) + 200', async () => {
+  it('happy path → BE /auth/login + /auth/me + role decoded from JWT (BE /me omits role) → session ADMIN + 200', async () => {
     overrides.nodeEnv = 'development'
     overrides.enableDevLogin = '1'
-    stubBeAuth(0)
+    stubBeAuth({ roleInJwt: 0 }) // /me omits role; JWT claim wins
     const res = await POST(postReq(), noParams)
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -128,9 +139,6 @@ describe('POST /api/dev/login', () => {
     expect(createMock).toHaveBeenCalledTimes(1)
     const [args] = createMock.mock.calls[0]
     expect((args as { role: number }).role).toBe(0)
-    expect((args as { tokens: { accessToken: string } }).tokens.accessToken).toBe(
-      'real.jwt.access',
-    )
   })
 
   it('foreign Origin → 403', async () => {
@@ -141,19 +149,28 @@ describe('POST /api/dev/login', () => {
     expect(res.status).toBe(403)
   })
 
-  it('me.role !== 0 (e.g. seed didn\'t promote) → session stored as role=USER', async () => {
+  it('JWT claim role=1 → session stored as role=USER (seed not promoted)', async () => {
     overrides.nodeEnv = 'development'
     overrides.enableDevLogin = '1'
-    stubBeAuth(1)
+    stubBeAuth({ roleInJwt: 1 })
     await POST(postReq(), noParams)
     const [args] = createMock.mock.calls[0]
     expect((args as { role: number }).role).toBe(1)
   })
 
+  it('BE /me returns role → /me value wins over JWT claim (future-proof)', async () => {
+    overrides.nodeEnv = 'development'
+    overrides.enableDevLogin = '1'
+    stubBeAuth({ roleInJwt: 1, roleInMe: 0 })
+    await POST(postReq(), noParams)
+    const [args] = createMock.mock.calls[0]
+    expect((args as { role: number }).role).toBe(0)
+  })
+
   it('ttl values match BE accessExpiresIn / refreshExpiresIn', async () => {
     overrides.nodeEnv = 'development'
     overrides.enableDevLogin = '1'
-    stubBeAuth(0)
+    stubBeAuth({ roleInJwt: 0 })
     await POST(postReq(), noParams)
     const [args] = createMock.mock.calls[0]
     const { tokens } = args as {
