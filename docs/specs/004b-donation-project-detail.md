@@ -1,6 +1,6 @@
 # Spec 004b：捐款專案介紹頁
 
-- **狀態**：Draft（v0.1）
+- **狀態**：Draft（v0.2 — cover 圖底部加 mask-image 淡出特效）
 - **路由**：`/donation-projects/:id`
 - **路徑**：`src/app/donation-projects/[id]/page.tsx` + `src/components/features/DonationProjectDetail.tsx`
 - **依賴**：[004 index](./004-detail-pages.md)
@@ -68,7 +68,7 @@ export default async function Page({ params }) {
 | 區塊 | 元件 |
 |---|---|
 | TopNav | [003b](./003b-topnav.md)，accessory = 分享 icon |
-| Cover | `<FallbackImage primary={coverImageUrl} fallback={pickFallbackImage('donation', id)} alt={name} className="w-full aspect-[4/3] object-cover" />`；缺 / onError → picsum（[003e4 §4](./003e4-image-fallback.md#4-使用方式card-整合)） |
+| Cover | `<FallbackImage primary={coverImageUrl} fallback={pickFallbackImage('donation', id)} alt={name} className="w-full aspect-[4/3] object-cover [mask-image:linear-gradient(to_bottom,black_92%,transparent)] [-webkit-mask-image:linear-gradient(to_bottom,black_92%,transparent)]" />`；缺 / onError → picsum（[003e4 §4](./003e4-image-fallback.md#4-使用方式card-整合)）。v0.2 — mask-image 讓底部 ~8% 逐漸透明、與下方 InfoPanel / page surface 柔接（無硬切割線）；ribbon / overlay 不受影響 |
 | Title block | `<h1>` + 字號（grey） |
 | 主辦團體 card | `<CharityChip charity />` — logo（[`<CharityLogo>`](./003e4-image-fallback.md#43-charity-logo初始字塊-fallback--charitylogo)：缺/onError → `getCharityInitial(name)` 首字塊）+ 名稱 + 「查看團體 ›」`<Link href={`/charities/${charity.id}`} replace>` ([§lateral nav 規則 004 §3.1](./004-detail-pages.md#31-橫向關聯導航策略v02-新增)) |
 | Categories tags | `<CategoryTags categories />` |

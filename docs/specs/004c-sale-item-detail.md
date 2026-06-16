@@ -1,6 +1,6 @@
 # Spec 004c：義賣商品介紹頁
 
-- **狀態**：Draft（v0.1）
+- **狀態**：Draft（v0.2 — cover 圖底部加 mask-image 淡出特效；ribbon 不受影響）
 - **路由**：`/sale-items/:id`
 - **路徑**：`src/app/sale-items/[id]/page.tsx` + `src/components/features/SaleItemDetail.tsx`
 - **依賴**：[004 index](./004-detail-pages.md)
@@ -65,7 +65,7 @@ export default async function Page({ params }) {
 | 區塊 | 元件 |
 |---|---|
 | TopNav | [003b](./003b-topnav.md)，標題「義賣商品」（IMG_4882 標題列字樣），accessory = 分享 |
-| Cover + ribbon | `<CoverWithRibbon coverImageUrl name fallback={pickFallbackImage('item', id)} />` — `<FallbackImage>` + 絲帶 banner overlay（「公益義賣 SHOP FOR CHANGE」）；缺 / onError → picsum（[003e4 §4](./003e4-image-fallback.md#4-使用方式card-整合)） |
+| Cover + ribbon | `<CoverWithRibbon coverImageUrl name fallback={pickFallbackImage('item', id)} />` — relative wrapper（aspect-square）內：`<FallbackImage className="w-full h-full object-cover [mask-image:linear-gradient(to_bottom,black_92%,transparent)] [-webkit-mask-image:linear-gradient(to_bottom,black_92%,transparent)]" />` + 絲帶 banner overlay（「公益義賣 SHOP FOR CHANGE」）；缺 / onError → picsum（[003e4 §4](./003e4-image-fallback.md#4-使用方式card-整合)）。v0.2 — mask-image 讓底部 ~8% 逐漸透明，與下方 InfoPanel 柔接；ribbon 在獨立 absolute div 不受 mask 影響 |
 | 商品名 + 價格 | `<div><h1 className="text-base font-semibold">{name}</h1><p className="text-lg font-bold text-red-500">TWD {千分位}</p></div>` |
 | 字號區 | `<ApprovalNoList raisingApprovalNo reliefApprovalNo />` |
 | 主辦團體 chip | 同 004b §4 `<CharityChip>`（logo 用 [`<CharityLogo>`](./003e4-image-fallback.md#43-charity-logo初始字塊-fallback--charitylogo)，缺/onError → 首字塊）；用 `<Link href replace>` ([004 §3.1 lateral nav](./004-detail-pages.md#31-橫向關聯導航策略v02-新增)) |
