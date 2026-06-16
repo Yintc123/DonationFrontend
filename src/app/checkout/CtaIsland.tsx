@@ -57,7 +57,7 @@ export function CtaIsland(props: CtaIslandProps) {
   const wrapper = props.sticky ? (
     <div
       className="sticky bottom-0 inset-x-0 bg-surface-card border-t border-line
-                 px-5 py-3 pb-[env(safe-area-inset-bottom)] z-30"
+                 px-5 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] z-30"
     >
       {button}
     </div>

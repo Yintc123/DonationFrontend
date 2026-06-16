@@ -92,7 +92,7 @@ export function CategoryMenu({
           onAnimationEnd={handleSheetAnimationEnd}
           className={`pointer-events-auto w-full md:max-w-[480px] bg-surface-card rounded-t-2xl
                       md:rounded-2xl md:mb-6
-                      shadow-2xl pb-[env(safe-area-inset-bottom)]
+                      shadow-2xl pb-[max(0.75rem,env(safe-area-inset-bottom))]
                       ${
                         isOpen
                           ? 'animate-slide-up-enter'
