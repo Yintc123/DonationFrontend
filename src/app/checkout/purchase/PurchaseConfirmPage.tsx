@@ -37,7 +37,7 @@ export function PurchaseConfirmPage({ draft }: Props) {
   return (
     <ConfirmPageShell
       title="確認捐款資訊"
-      ctaLabel="確認送出"
+      ctaLabel="確認購買"
       isValid={isValid}
       onSubmit={handleSubmit}
     >

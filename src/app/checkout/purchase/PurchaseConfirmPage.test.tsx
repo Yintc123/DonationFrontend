@@ -63,7 +63,7 @@ describe('PurchaseConfirmPage', () => {
     expect(screen.getByText('捐款人基本資料')).toBeInTheDocument()
     expect(screen.getByText('收據資訊')).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: '確認送出' }),
+      screen.getByRole('button', { name: '確認購買' }),
     ).toBeInTheDocument()
   })
 
@@ -86,7 +86,7 @@ describe('PurchaseConfirmPage', () => {
 
   it('4: 姓名 input 打字 → submit 從 disabled 變 enabled', async () => {
     render(<PurchaseConfirmPage draft={DRAFT_QTY_1} />)
-    const submit = screen.getByRole('button', { name: '確認送出' })
+    const submit = screen.getByRole('button', { name: '確認購買' })
     expect(submit).toBeDisabled()
     await userEvent.type(screen.getByLabelText(/捐款人姓名/), 'Alice')
     expect(submit).toBeEnabled()
@@ -103,7 +103,7 @@ describe('PurchaseConfirmPage', () => {
   it('6: 填齊後送出 → toast.success', async () => {
     render(<PurchaseConfirmPage draft={DRAFT_QTY_1} />)
     await userEvent.type(screen.getByLabelText(/捐款人姓名/), 'Alice')
-    await userEvent.click(screen.getByRole('button', { name: '確認送出' }))
+    await userEvent.click(screen.getByRole('button', { name: '確認購買' }))
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/checkout/purchase',
       expect.objectContaining({ method: 'POST' }),

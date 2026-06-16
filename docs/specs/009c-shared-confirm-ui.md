@@ -1,6 +1,6 @@
 # Spec 009c：confirm 頁共用 UI primitives
 
-- **狀態**：Draft（v0.3 — CTA label prop 註解差異化：donation 用「確認捐款」、purchase 用「確認送出」；primitive API 本身無變動）
+- **狀態**：Draft（v0.4 — CTA label prop 註解：donation 用「確認捐款」、purchase 用「確認購買」；primitive API 本身無變動）
 - **建立日期**：2026-06-15
 - **路徑（規劃）**：
   - `src/components/ui/ConfirmPageShell.tsx` + `.test.tsx`
@@ -40,7 +40,7 @@
 type ConfirmPageShellProps = {
   /** TopNav 標題（confirm family 預設「確認捐款資訊」，但仍 prop 化以利擴充） */
   title: string
-  /** Sticky CTA 文字（caller 自訂：捐款頁「確認捐款」、購買頁「確認送出」） */
+  /** Sticky CTA 文字（caller 自訂：捐款頁「確認捐款」、購買頁「確認購買」） */
   ctaLabel: string
   /** Sticky CTA disabled gate */
   isValid: boolean
@@ -235,7 +235,7 @@ export function RequiredLabel({ htmlFor, children, className = '' }: RequiredLab
 
 ```ts
 type StickyConfirmCtaProps = {
-  label: string                   // caller 自訂：捐款頁「確認捐款」、購買頁「確認送出」
+  label: string                   // caller 自訂：捐款頁「確認捐款」、購買頁「確認購買」
   isValid: boolean                // disabled gate
 }
 ```
@@ -459,3 +459,4 @@ export function DonationConfirmPage({ query, target }) {
 | 0.1 | 2026-06-15 | 初版：從 [009a v0.2](./009a-donation-confirm.md) §3–§6 與 [009b v0.2](./009b-purchase-confirm.md) §3–§7 inline 排版抽出 6 個 primitive；對齊 008a BottomSheet 「UI primitive vs business form 分 spec」慣例 |
 | 0.2 | 2026-06-16 | **新增 §2.7 `<ReminderNote>`**（卡內 inline 提醒）+ `REMINDER_DONOR_NAME` 文案 const；參考 IMG_4891（donation confirm 截圖）。文案中圖原文「姓名與身分證字號」對齊本頁實際可編輯欄位（僅姓名）做收斂；身分證字號預設來自 JKOS 帳戶 KYC，本頁不蒐集。Test §4.7（5 case）；§1 primitive 數量 6 → 7 |
 | 0.3 | 2026-06-16 | **CTA label prop 註解差異化**：§2.1 `ctaLabel` + §2.6 `label` 與 §3 範例註解從 hardcode「確認送出」改為 caller-自訂、註記「捐款頁「確認捐款」、購買頁「確認送出」」；§3 example 內 ctaLabel 從「確認送出」改為「確認捐款」（donation flow 為主示例）。Primitive API 本身無變；StickyConfirmCta 仍接受任意 string。配套於 [009a v0.13](./009a-donation-confirm.md) 與 [009 v0.9](./009-checkout-confirm.md) |
+| 0.4 | 2026-06-16 | **CTA label prop 註解：purchase 從「確認送出」改成「確認購買」**：§2.1 `ctaLabel` + §2.6 `label` 註解內 purchase 字串同步更新;StickyConfirmCta / ConfirmPageShell 元件 test 用「確認送出」當 fixture 字串保留,展示 prop 接受任意 string 的通用性(不綁業務文案)。Primitive API 本身無變。配套於 [009b v0.11](./009b-purchase-confirm.md) 與 [009 v0.10](./009-checkout-confirm.md) |
