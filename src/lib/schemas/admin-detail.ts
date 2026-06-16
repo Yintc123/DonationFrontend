@@ -1,17 +1,24 @@
-// Spec 011 §5.4 — admin variant of charity detail.
+// Spec 011 §5.4 — admin variants of charity / project / item.
 //
-// Backend spec 026 admin GET endpoints return the public charity detail
-// (spec 017) plus the 5 admin lifecycle fields. Mirror that shape so
-// edit forms can pre-fill displayOrder / publishStartAt / publishEndAt
-// — the public schema in detail.ts intentionally omits these.
+// BE 026 admin GET endpoints return the public detail shape (spec 017)
+// plus admin lifecycle metadata. Mirror exactly so edit forms can
+// pre-fill displayOrder / publishStartAt / publishEndAt — the public
+// schemas in detail.ts intentionally omit these.
 
 import { z } from 'zod'
 import { InflatedCategory } from './detail'
 
-// Re-derive the public shape inline here; importing BackendCharityDetail
-// then `.merge()` would couple the modules circularly during refactors.
+const NullableIsoDate = z.string().nullable()
+
+const AdminLifecycle = z.object({
+  displayOrder: z.number().int(),
+  publishStartAt: NullableIsoDate,
+  publishEndAt: NullableIsoDate,
+  archivedAt: NullableIsoDate,
+  deletedAt: NullableIsoDate,
+})
+
 export const BackendAdminCharityDetail = z.object({
-  // ── public CharityDetail fields ─────────────────────────────────────
   id: z.string().uuid(),
   name: z.string(),
   description: z.string(),
@@ -23,12 +30,25 @@ export const BackendAdminCharityDetail = z.object({
   categories: z.array(InflatedCategory),
   createdAt: z.string(),
   updatedAt: z.string(),
-  // ── admin lifecycle metadata (spec 026 §5.1.2) ──────────────────────
-  displayOrder: z.number().int(),
-  publishStartAt: z.string().nullable(),
-  publishEndAt: z.string().nullable(),
-  archivedAt: z.string().nullable(),
-  deletedAt: z.string().nullable(),
-})
+}).merge(AdminLifecycle)
 
 export type BackendAdminCharityDetail = z.infer<typeof BackendAdminCharityDetail>
+
+// BE 026 admin list item: standalone shape (omits createdAt/updatedAt
+// per spec §5.1.1), so don't .merge() with BackendCharityListItem.
+export const BackendAdminCharityListItem = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string(),
+  logoUrl: z.string().url().nullable(),
+  categories: z.array(InflatedCategory),
+}).merge(AdminLifecycle)
+
+export type BackendAdminCharityListItem = z.infer<typeof BackendAdminCharityListItem>
+
+export const BackendAdminCharityListResponse = z.object({
+  items: z.array(BackendAdminCharityListItem),
+  nextCursor: z.string().nullable().optional(),
+})
+
+export type BackendAdminCharityListResponse = z.infer<typeof BackendAdminCharityListResponse>

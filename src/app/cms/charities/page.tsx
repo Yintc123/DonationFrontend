@@ -8,43 +8,36 @@ import Link from 'next/link'
 
 import { AdminPageShell } from '@/components/cms/AdminPageShell'
 import { AdminTable, type AdminTableColumn } from '@/components/cms/AdminTable'
-import { z } from 'zod'
 
 import { backendFetch } from '@/lib/api/backend'
 import { ContractViolationError } from '@/lib/errors/ContractViolationError'
 import {
-  BackendCharityListItem,
-  type BackendCharityListItem as CharityListItem,
-} from '@/lib/schemas/list'
+  BackendAdminCharityListResponse,
+  type BackendAdminCharityListItem,
+} from '@/lib/schemas/admin-detail'
 import { requireAdminSession } from '@/lib/session/requireAdmin'
-
-const ListResponseSchema = z.object({
-  items: z.array(BackendCharityListItem),
-  nextCursor: z.string().nullable().optional(),
-})
 
 export const metadata: Metadata = {
   title: '公益團體 | JKODonation',
 }
 
-async function fetchAdminCharityList(): Promise<CharityListItem[]> {
-  // v0.1 fallback: BE 026 admin list endpoint not shipped yet — use the
-  // user-side list (returns only `whereLive` rows; admin sees the same
-  // "in-progress" set as users). limit capped at 50 by BE user-side
-  // ListQueryBase (admin endpoint caps at 100; switch when BE 026 lands).
+async function fetchAdminCharityList(): Promise<BackendAdminCharityListItem[]> {
+  // BE 026 §5.1.1 — admin list endpoint (limit cap 100). Returns rows
+  // with admin lifecycle metadata (displayOrder / publish window / etc).
+  // v0.1 fetches 100 in one go; pagination chrome lands in v0.2.
   const { data } = await backendFetch<unknown>(
-    '/user/v1/donation/charities?limit=50',
+    '/cms/donation/charities?limit=100',
   )
-  const parsed = ListResponseSchema.safeParse(data)
+  const parsed = BackendAdminCharityListResponse.safeParse(data)
   if (!parsed.success) {
     throw new ContractViolationError(
-      `Charity list schema mismatch: ${parsed.error.message}`,
+      `Admin charity list schema mismatch: ${parsed.error.message}`,
     )
   }
   return parsed.data.items
 }
 
-const COLUMNS: AdminTableColumn<CharityListItem>[] = [
+const COLUMNS: AdminTableColumn<BackendAdminCharityListItem>[] = [
   { header: '名稱', cell: (r) => r.name, width: 'flex-1' },
   {
     header: '類別',
@@ -55,14 +48,22 @@ const COLUMNS: AdminTableColumn<CharityListItem>[] = [
     width: 'w-40',
   },
   {
+    header: '排序',
+    cell: (r) => r.displayOrder,
+    width: 'w-16',
+    align: 'right',
+  },
+  {
     header: '操作',
-    cell: () => (
-      // Edit link is a placeholder until BE 026 admin detail ships — the
-      // edit form needs displayOrder / publishStartAt / publishEndAt that
-      // user-side detail doesn't return (spec 011 §5.4).
-      <span className="text-ink-A text-xs">編輯（待 BE）</span>
+    cell: (r) => (
+      <Link
+        href={`/cms/charities/${r.id}/edit`}
+        className="text-ink-link text-xs underline-offset-2 hover:underline"
+      >
+        編輯
+      </Link>
     ),
-    width: 'w-32',
+    width: 'w-16',
     align: 'right',
   },
 ]

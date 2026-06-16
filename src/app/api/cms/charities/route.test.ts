@@ -195,28 +195,40 @@ describe('GET /api/cms/charities', () => {
     expect(res.status).toBe(401)
   })
 
-  it('admin → forward /user/v1/donation/charities (v0.1 fallback)', async () => {
+  it('admin → forward /cms/donation/charities', async () => {
     overrides.session = adminSession()
     let receivedUrl: string | undefined
-    mockBackend('get', 'http://backend.test/user/v1/donation/charities', (req) => {
+    mockBackend('get', 'http://backend.test/cms/donation/charities', (req) => {
       receivedUrl = req.url
       return HttpResponse.json({ items: [], nextCursor: null }, { status: 200 })
     })
-    const res = await GET(getReq('limit=30'), noParams)
+    const res = await GET(getReq('limit=50'), noParams)
     expect(res.status).toBe(200)
-    expect(receivedUrl).toContain('/user/v1/donation/charities')
-    expect(receivedUrl).toContain('limit=30')
+    expect(receivedUrl).toContain('/cms/donation/charities')
+    expect(receivedUrl).toContain('limit=50')
   })
 
-  it('admin + requested limit > 50 → cap at 50 (user-side max)', async () => {
+  it('admin + requested limit > 100 → cap at 100 (admin endpoint max)', async () => {
     overrides.session = adminSession()
     let receivedUrl: string | undefined
-    mockBackend('get', 'http://backend.test/user/v1/donation/charities', (req) => {
+    mockBackend('get', 'http://backend.test/cms/donation/charities', (req) => {
       receivedUrl = req.url
       return HttpResponse.json({ items: [], nextCursor: null }, { status: 200 })
     })
-    const res = await GET(getReq('limit=200'), noParams)
+    const res = await GET(getReq('limit=999'), noParams)
     expect(res.status).toBe(200)
-    expect(receivedUrl).toContain('limit=50')
+    expect(receivedUrl).toContain('limit=100')
+  })
+
+  it('admin + includeArchived flag → forwarded', async () => {
+    overrides.session = adminSession()
+    let receivedUrl: string | undefined
+    mockBackend('get', 'http://backend.test/cms/donation/charities', (req) => {
+      receivedUrl = req.url
+      return HttpResponse.json({ items: [], nextCursor: null }, { status: 200 })
+    })
+    const res = await GET(getReq('includeArchived=true'), noParams)
+    expect(res.status).toBe(200)
+    expect(receivedUrl).toContain('includeArchived=true')
   })
 })
