@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Tailwind v4 auto-detects sources; exclude docs/ so class-name strings
+ * in spec examples (e.g. `min-h-[calc(var(--rows)*24px)]`) are not
+ * compiled into the CSS bundle — invalid examples would break the build. */
+@source not "../../docs";
+
 /* ============================================================
  * Spec 003a v0.3 — Design System tokens
  * ============================================================

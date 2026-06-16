@@ -220,7 +220,7 @@ type TextareaProps = {
 }
 ```
 
-實作同 Input 但 element 是 `<textarea>`、`min-h-[var(--rows*24px)]` 自動長高、`resize-y` 允許使用者拖。
+實作同 Input 但 element 是 `<textarea>`、`min-h-[calc(var(--rows)*24px)]` 自動長高、`resize-y` 允許使用者拖。
 
 ### 3.4 `<NumberInput>` — 整數輸入
 
