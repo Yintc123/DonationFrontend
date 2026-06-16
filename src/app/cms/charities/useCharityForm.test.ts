@@ -6,6 +6,7 @@ import {
   isValid,
   reducer,
   useCharityForm,
+  validate,
   type FormState,
 } from './useCharityForm'
 
@@ -91,8 +92,17 @@ describe('reducer', () => {
 // ── isValid (V) ──────────────────────────────────────────────────────────
 
 describe('isValid', () => {
+  // All five required fields filled to a baseline-valid state.
   function withRequired(over: Partial<FormState> = {}): FormState {
-    return { ...DEFAULT_FORM, name: 'X', description: 'd', ...over }
+    return {
+      ...DEFAULT_FORM,
+      name: 'X',
+      description: 'd',
+      publishStartAt: '2026-06-16T00:00:00.000Z',
+      publishEndAt: '2026-12-31T00:00:00.000Z',
+      categoryIds: ['cat-1'],
+      ...over,
+    }
   }
 
   it('V1: name 空 → false', () => {
@@ -126,7 +136,7 @@ describe('isValid', () => {
     ).toBe(false)
   })
 
-  it('V6: 必填齊 + optional 空 → true', () => {
+  it('V6: 五個必填齊 → true', () => {
     expect(isValid(withRequired())).toBe(true)
   })
 
@@ -134,6 +144,75 @@ describe('isValid', () => {
     expect(isValid({ ...withRequired(), contactEmail: 'no-at-sign' })).toBe(
       false,
     )
+  })
+
+  it('V8: publishStartAt 空 → false（必填）', () => {
+    expect(isValid({ ...withRequired(), publishStartAt: '' })).toBe(false)
+  })
+
+  it('V9: publishEndAt 空 → false（必填）', () => {
+    expect(isValid({ ...withRequired(), publishEndAt: '' })).toBe(false)
+  })
+
+  it('V10: categoryIds 空 → false（必填至少 1 個）', () => {
+    expect(isValid({ ...withRequired(), categoryIds: [] })).toBe(false)
+  })
+})
+
+// ── validate (Vd) — missing-field naming for toast ───────────────────────
+
+describe('validate', () => {
+  it('Vd1: 完全空 form → missing 列出 5 個必填', () => {
+    const r = validate(DEFAULT_FORM)
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    // 「類別」label 帶括號補充說明，用 substring 比對較穩
+    expect(r.missing).toEqual(
+      expect.arrayContaining(['名稱', '簡介', '上架時間', '下架時間']),
+    )
+    expect(r.missing.some((m) => m.includes('類別'))).toBe(true)
+  })
+
+  it('Vd2: 全填 valid → ok', () => {
+    expect(
+      validate({
+        ...DEFAULT_FORM,
+        name: 'X',
+        description: 'd',
+        publishStartAt: '2026-06-16T00:00:00.000Z',
+        publishEndAt: '2026-12-31T00:00:00.000Z',
+        categoryIds: ['cat-1'],
+      }).ok,
+    ).toBe(true)
+  })
+
+  it('Vd3: publishEnd <= publishStart → missing 包含「下架時間」', () => {
+    const r = validate({
+      ...DEFAULT_FORM,
+      name: 'X',
+      description: 'd',
+      publishStartAt: '2026-06-16T00:00:00.000Z',
+      publishEndAt: '2026-06-16T00:00:00.000Z',
+      categoryIds: ['cat-1'],
+    })
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.missing.some((m) => m.includes('下架時間'))).toBe(true)
+  })
+
+  it('Vd4: contactEmail 格式錯 → missing 列出 Email', () => {
+    const r = validate({
+      ...DEFAULT_FORM,
+      name: 'X',
+      description: 'd',
+      publishStartAt: '2026-06-16T00:00:00.000Z',
+      publishEndAt: '2026-12-31T00:00:00.000Z',
+      categoryIds: ['cat-1'],
+      contactEmail: 'bad-email',
+    })
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.missing.some((m) => m.includes('Email'))).toBe(true)
   })
 })
 
@@ -183,28 +262,50 @@ describe('buildPayload', () => {
 // ── Hook (H) — async handleSubmit ────────────────────────────────────────
 
 describe('useCharityForm', () => {
-  it('H1: 初始 invalid（name 空）', () => {
+  function fillRequired(
+    dispatch: (a: { type: string; value: unknown }) => void,
+  ) {
+    dispatch({ type: 'SET_NAME', value: 'X' })
+    dispatch({ type: 'SET_DESCRIPTION', value: 'd' })
+    dispatch({
+      type: 'SET_PUBLISH_START_AT',
+      value: '2026-06-16T00:00:00.000Z',
+    })
+    dispatch({
+      type: 'SET_PUBLISH_END_AT',
+      value: '2026-12-31T00:00:00.000Z',
+    })
+    dispatch({ type: 'SET_CATEGORY_IDS', value: ['cat-1'] })
+  }
+
+  it('H1: 初始 invalid（5 個必填都空）', () => {
     const { result } = renderHook(() => useCharityForm())
     expect(result.current.isValid).toBe(false)
   })
 
-  it('H2: dispatch 後 isValid 反映', () => {
+  it('H2: 五個必填都 dispatch 後 isValid 反映', () => {
     const { result } = renderHook(() => useCharityForm())
     act(() => {
-      result.current.dispatch({ type: 'SET_NAME', value: 'X' })
-    })
-    act(() => {
-      result.current.dispatch({ type: 'SET_DESCRIPTION', value: 'd' })
+      fillRequired(
+        result.current.dispatch as (a: { type: string; value: unknown }) => void,
+      )
     })
     expect(result.current.isValid).toBe(true)
   })
 
-  it('H3: invalid 時 handleSubmit → fetch 不叫', async () => {
+  it('H3: invalid 時 handleSubmit → toast.error 點名缺欄 + fetch 不叫', async () => {
     const { result } = renderHook(() => useCharityForm())
     await act(async () => {
       await result.current.handleSubmit()
     })
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    const msg = toastErrorMock.mock.calls[0][0] as string
+    expect(msg).toMatch(/名稱/)
+    expect(msg).toMatch(/簡介/)
+    expect(msg).toMatch(/上架時間/)
+    expect(msg).toMatch(/下架時間/)
+    expect(msg).toMatch(/類別/)
   })
 
   it('H4: create happy → POST /api/cms/charities (含 x-csrf-token) + toast.success + router.replace /cms/charities', async () => {
@@ -216,13 +317,13 @@ describe('useCharityForm', () => {
     )
     const { result } = renderHook(() => useCharityForm())
     act(() => {
-      result.current.dispatch({ type: 'SET_NAME', value: 'X' })
-      result.current.dispatch({ type: 'SET_DESCRIPTION', value: 'd' })
+      fillRequired(
+        result.current.dispatch as (a: { type: string; value: unknown }) => void,
+      )
     })
     await act(async () => {
       await result.current.handleSubmit()
     })
-    // first call hits /api/csrf, second hits the mutation
     const calls = fetchMock.mock.calls
     expect(calls[0][0]).toBe('/api/csrf')
     expect(calls[1][0]).toBe('/api/cms/charities')
@@ -245,6 +346,9 @@ describe('useCharityForm', () => {
       ...DEFAULT_FORM,
       name: 'Existing',
       description: 'd',
+      publishStartAt: '2026-06-16T00:00:00.000Z',
+      publishEndAt: '2026-12-31T00:00:00.000Z',
+      categoryIds: ['cat-1'],
     }
     const { result } = renderHook(() => useCharityForm({ id: 'abc', initial: init }))
     await act(async () => {
@@ -265,8 +369,9 @@ describe('useCharityForm', () => {
     )
     const { result } = renderHook(() => useCharityForm())
     act(() => {
-      result.current.dispatch({ type: 'SET_NAME', value: 'X' })
-      result.current.dispatch({ type: 'SET_DESCRIPTION', value: 'd' })
+      fillRequired(
+        result.current.dispatch as (a: { type: string; value: unknown }) => void,
+      )
     })
     await act(async () => {
       await result.current.handleSubmit()
@@ -279,8 +384,9 @@ describe('useCharityForm', () => {
     setFetchResponse(new Error('network'))
     const { result } = renderHook(() => useCharityForm())
     act(() => {
-      result.current.dispatch({ type: 'SET_NAME', value: 'X' })
-      result.current.dispatch({ type: 'SET_DESCRIPTION', value: 'd' })
+      fillRequired(
+        result.current.dispatch as (a: { type: string; value: unknown }) => void,
+      )
     })
     await act(async () => {
       await result.current.handleSubmit()

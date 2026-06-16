@@ -71,20 +71,52 @@ function isLikelyUrl(s: string): boolean {
   try { new URL(s); return /^https?:/.test(s) } catch { return false }
 }
 
-export function isValid(s: FormState): boolean {
+export type ValidationResult =
+  | { ok: true }
+  | { ok: false; missing: string[] }
+
+/**
+ * Returns the list of missing / mis-formatted fields (Chinese labels)
+ * so the submit handler can `toast.error('請填寫：' + list.join('、'))`.
+ *
+ * Required: name / description / publishStartAt / publishEndAt /
+ * categoryIds (≥ 1). Soft-validation for email / URL / lengths only
+ * triggers when the field is non-empty.
+ */
+export function validate(s: FormState): ValidationResult {
+  const missing: string[] = []
   const trimmedName = s.name.trim()
-  if (trimmedName.length === 0 || trimmedName.length > 120) return false
-  if (s.description.length === 0 || s.description.length > 500) return false
-  if (s.contactPhone && s.contactPhone.length > 40) return false
-  if (s.contactEmail && !isLikelyEmail(s.contactEmail)) return false
-  if (s.officialWebsite && !isLikelyUrl(s.officialWebsite)) return false
-  if (s.approvalNo && s.approvalNo.length > 100) return false
-  if (s.displayOrder < -1000 || s.displayOrder > 1000) return false
-  if (s.publishStartAt && s.publishEndAt && s.publishEndAt <= s.publishStartAt) {
-    return false
+  if (trimmedName.length === 0) missing.push('名稱')
+  else if (trimmedName.length > 120) missing.push('名稱（超過 120 字）')
+  if (s.description.length === 0) missing.push('簡介')
+  else if (s.description.length > 500) missing.push('簡介（超過 500 字）')
+  if (!s.publishStartAt) missing.push('上架時間')
+  if (!s.publishEndAt) missing.push('下架時間')
+  else if (s.publishStartAt && s.publishEndAt <= s.publishStartAt) {
+    missing.push('下架時間（必須晚於上架時間）')
   }
-  if (s.categoryIds.length > 16) return false
-  return true
+  if (s.categoryIds.length === 0) missing.push('類別（至少 1 個）')
+  else if (s.categoryIds.length > 16) missing.push('類別（最多 16 個）')
+  if (s.contactPhone && s.contactPhone.length > 40) {
+    missing.push('聯絡電話（超過 40 字）')
+  }
+  if (s.contactEmail && !isLikelyEmail(s.contactEmail)) {
+    missing.push('聯絡 Email（格式錯誤）')
+  }
+  if (s.officialWebsite && !isLikelyUrl(s.officialWebsite)) {
+    missing.push('官方網站（須含 http:// 或 https://）')
+  }
+  if (s.approvalNo && s.approvalNo.length > 100) {
+    missing.push('勸募立案核准字號（超過 100 字）')
+  }
+  if (s.displayOrder < -1000 || s.displayOrder > 1000) {
+    missing.push('顯示順序（範圍 -1000 ~ 1000）')
+  }
+  return missing.length === 0 ? { ok: true } : { ok: false, missing }
+}
+
+export function isValid(s: FormState): boolean {
+  return validate(s).ok
 }
 
 export interface CharityCreatePayload {
@@ -128,7 +160,11 @@ export function useCharityForm(opts: UseCharityFormOptions = {}) {
   const valid = isValid(form)
 
   const handleSubmit = useCallback(async () => {
-    if (!isValid(form)) return
+    const v = validate(form)
+    if (!v.ok) {
+      toast.error(`請填寫：${v.missing.join('、')}`)
+      return
+    }
     const payload = buildPayload(form)
     const endpoint = opts.id
       ? `/api/cms/charities/${opts.id}`

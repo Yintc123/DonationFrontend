@@ -23,7 +23,7 @@ type CharityFormProps = {
 }
 
 export function CharityForm({ mode, id, initial, categories }: CharityFormProps) {
-  const { form, dispatch, isValid, handleSubmit } = useCharityForm({ id, initial })
+  const { form, dispatch, handleSubmit } = useCharityForm({ id, initial })
 
   const title = mode === 'create' ? '新增公益團體' : '編輯公益團體'
   const submitLabel = mode === 'create' ? '建立' : '儲存'
@@ -34,11 +34,12 @@ export function CharityForm({ mode, id, initial, categories }: CharityFormProps)
       backHref="/cms/charities"
       onSubmit={handleSubmit}
       actions={
+        // Button stays enabled — handleSubmit toasts missing field names so
+        // operators can see what's blocking rather than guess why a greyed
+        // button isn't clickable.
         <button
           type="submit"
-          disabled={!isValid}
           className="w-full h-11 rounded-full bg-brand text-white text-sm font-semibold
-                     disabled:bg-black/10 disabled:text-ink-A
                      focus-visible:outline focus-visible:outline-2
                      focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
@@ -125,7 +126,8 @@ export function CharityForm({ mode, id, initial, categories }: CharityFormProps)
       <FormField
         id="publishStartAt"
         label="上架時間"
-        hint="空白 = 立即生效"
+        required
+        hint="必填"
       >
         <DateTimeInput
           id="publishStartAt"
@@ -137,7 +139,8 @@ export function CharityForm({ mode, id, initial, categories }: CharityFormProps)
       <FormField
         id="publishEndAt"
         label="下架時間"
-        hint="空白 = 永不下架；必須晚於上架時間"
+        required
+        hint="必填；須晚於上架時間"
       >
         <DateTimeInput
           id="publishEndAt"
@@ -149,7 +152,8 @@ export function CharityForm({ mode, id, initial, categories }: CharityFormProps)
       <FormField
         id="categoryIds"
         label="類別"
-        hint={`最多 16 個（目前 ${form.categoryIds.length} 個）`}
+        required
+        hint={`至少 1 個、最多 16 個（目前 ${form.categoryIds.length} 個）`}
       >
         {/* MultiSelectChips 渲染為 button-group；FormField label 已用 htmlFor
             連到 categoryIds 雖然非 input element，仍維持 a11y associative。 */}
