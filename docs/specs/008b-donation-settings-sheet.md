@@ -473,7 +473,7 @@ onClose()
 
 跳轉到 [009a `/checkout/donation` 確認頁](./009a-donation-confirm.md)。Confirm 頁 RSC 用 Zod 重新驗證 query params（防使用者亂改 URL），fail → 404。
 
-> v0.1~0.2 用 `console.log` 是因為 confirm 頁還沒存在。v0.3 接上 009a 後 UI 流程完整。confirm 頁的「確認送出」按鈕仍是 `console.log` placeholder（依 brief.md「不接金流」）。
+> v0.1~0.2 用 `console.log` 是因為 confirm 頁還沒存在。v0.3 接上 009a 後 UI 流程完整。confirm 頁的「確認捐款」按鈕仍是 `console.log` placeholder（依 brief.md「不接金流」）。
 
 ---
 

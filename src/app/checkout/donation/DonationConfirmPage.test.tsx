@@ -123,9 +123,9 @@ describe('DonationConfirmPage', () => {
     expect(screen.getByLabelText(/捐款人姓名/)).toBeInTheDocument()
   })
 
-  it('4b (v0.9): sticky CTA「確認送出」收據未選 disabled；選後填姓名才 enabled', async () => {
+  it('4b (v0.9): sticky CTA「確認捐款」收據未選 disabled；選後填姓名才 enabled', async () => {
     render(<DonationConfirmPage draft={CHARITY_DRAFT_ONE_TIME} />)
-    const submit = screen.getByRole('button', { name: '確認送出' })
+    const submit = screen.getByRole('button', { name: '確認捐款' })
     expect(submit).toBeDisabled()
 
     // 只選收據還不夠，仍 disabled
@@ -145,7 +145,7 @@ describe('DonationConfirmPage', () => {
       'NONE',
     )
     await userEvent.type(screen.getByLabelText(/捐款人姓名/), 'Alice')
-    await userEvent.click(screen.getByRole('button', { name: '確認送出' }))
+    await userEvent.click(screen.getByRole('button', { name: '確認捐款' }))
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/checkout/donation',
       expect.objectContaining({ method: 'POST' }),

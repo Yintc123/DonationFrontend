@@ -1,6 +1,6 @@
 # Spec 009：結帳確認頁（捐款 / 購買，index）
 
-- **狀態**：Draft（v0.8 — BFF Zod 驗 BE 022 order 回應 + `isAnonymous` 對齊 BE TypeBox optional default false + mock 改 `crypto.randomUUID()`）
+- **狀態**：Draft（v0.9 — donation CTA 文字 `確認送出` → `確認捐款`；purchase 維持「確認送出」）
 - **建立日期**：2026-06-15
 - **Figma 對應**：IMG_4888（charity 直捐確認）/ IMG_4889（donation 確認）/ IMG_4890（item 購買確認）
 
@@ -131,7 +131,7 @@ TopNav + 紅 hero + `<form>` + sticky CTA 整套外殼實作於 [`<ConfirmPageSh
 ```tsx
 <ConfirmPageShell
   title="確認捐款資訊"
-  ctaLabel="確認送出"
+  ctaLabel="確認捐款"
   isValid={isValid}
   onSubmit={handleSubmit}
 >
@@ -156,7 +156,7 @@ TopNav + 紅 hero + `<form>` + sticky CTA 整套外殼實作於 [`<ConfirmPageSh
 
 實作於 [`<StickyConfirmCta>`](./009c-shared-confirm-ui.md#26-stickyconfirmcta--sticky-底部送出按鈕)，由 [`<ConfirmPageShell>`](./009c-shared-confirm-ui.md#21-confirmpageshell--整頁外殼) 內部渲染、caller 不需手動掛。`type="submit"` 隨 form 觸發。
 
-> CTA 文字「確認送出」是 spec 沿用既有 detail 頁紅色 pill 風格；Figma 沒明示這頁的 CTA 文字（截圖只到中間），這是 spec 級的合理推斷。
+> CTA 文字由 caller 決定：捐款頁用「確認捐款」、購買頁用「確認送出」。Figma 沒明示這頁的 CTA 文字（截圖只到中間），是 spec 級的合理推斷,沿用既有 detail 頁紅色 pill 風格。
 
 ### 3.5 Disclaimer 字串
 
@@ -293,3 +293,4 @@ type CtaIslandProps = {
 | 0.6 | 2026-06-15 | **donation flow 也支援匿名**：BFF `/api/checkout/donation` body Zod `isAnonymous` 從 `z.literal(false)` 升為 `z.boolean()`，配合 [009a v0.8](./009a-donation-confirm.md) 把「我要匿名捐款」checkbox 加進 charity / project 確認頁。BE 022 §4.1/§4.2 本來就接受 boolean、無變動。同檔新增 wiring test「isAnonymous=true 也通過 schema」 |
 | 0.7 | 2026-06-16 | **`_endpoint` discriminator cutover 到 `/user/v1/donation/orders/*`**（對齊 [backend spec 023 §2.4](../../../backend/docs/specs/023-api-routing-versioning.md)）：BE 把三條 order create endpoint 從 `/v1/donation/orders/*` 移到 `/user/v1/donation/orders/*`；FE side discriminator 字面值 = BE 真實 path，必須同步替換。§2 routing 表 + §5 BFF route handler 範例 + §7 mock dispatcher 都更新。對應檔案：`src/app/api/checkout/{donation,purchase}/route.ts` zod literal、`useDonorInfoForm.ts` / `useReceiptInfoForm.ts` 中的 `_endpoint` literal、`src/lib/mock/register.ts` 三條 `registerMock` 路徑、相關測試 URL 斷言。 |
 | 0.8 | 2026-06-16 | **BE 022 contract audit fixes**（FE BFF 對齊 [backend spec 022](../../../backend/docs/specs/022-donation-order-api.md) §4.1/§4.2/§4.3 / §4.0）：(a) **Order response Zod 驗證**：兩條 `/api/checkout/*` route 改用 `BeOrderResponse = z.object({ id: z.string().uuid(), status: z.string().min(1) }).passthrough()` 驗 backend 201 body；非 uuid 或 缺 `id` / `status` → 502 `ContractViolationError`（取代原本的 TS cast `BeOrderResponse = { id, status }`，避免 BE 改 `id → orderId` 之類靜默失敗）；(b) **`isAnonymous` 對齊 BE TypeBox `Type.Optional(Type.Boolean())`**：BFF body Zod 從 `z.boolean()` (required) 改 `z.boolean().optional().default(false)`，未傳值的 client 也能通過 schema；(c) **mock orders handler 改用 `crypto.randomUUID()`**：原 `'chad0000-...'` / `'prod0000-...'` / `'saip0000-...'` 含非 hex 字元，加 `.uuid()` 驗證後會炸；改 `randomUUID()` 同時也更貼近 BE 真實行為；(d) 6 個新 BFF test：每條 route 各加「省略 isAnonymous → 仍 200」/「BE 回應缺 id → 502」/「BE 回應 id 非 uuid → 502」。Test 總數 746 → 752。 |
+| 0.9 | 2026-06-16 | **donation CTA 文字 `確認送出` → `確認捐款`**：v0.1 沿用 detail 頁紅 pill「確認送出」屬 generic 推斷；現對齊本 family hero「確認捐款資訊」與 donation flow 的「捐款」語意，明確化為「確認捐款」。**Purchase（009b）維持「確認送出」**：義賣商品購買語意更接近 generic 送出，且本頁實際是「填收據資訊 + 送出購買」，非「捐款」動作。改動範圍：§3.0 外殼範例 `ctaLabel`、§3.4 註解（從「沿用 detail」改為「caller 決定，差異化說明」）；009a v0.13 page + test 同步替換；009c v0.3 primitive prop 註解差異化（API 本身無變）。BFF / payload / submit 行為皆無變動 |
