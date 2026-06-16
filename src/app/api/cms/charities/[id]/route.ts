@@ -12,10 +12,10 @@ import { CharityIdParams, CharityPatchBody } from '../schemas'
 
 export const GET = createAdminRoute({
   paramsSchema: CharityIdParams,
-  handler: async ({ params, requestId }) => {
+  handler: async ({ params, requestId, session }) => {
     const { data } = await backendFetch<unknown>(
       `/cms/donation/charities/${params.id}`,
-      { requestId },
+      { requestId, session },
     )
     const parsed = BackendAdminCharityDetail.safeParse(data)
     if (!parsed.success) {
@@ -30,7 +30,7 @@ export const GET = createAdminRoute({
 export const PATCH = createAdminRoute({
   paramsSchema: CharityIdParams,
   bodySchema: CharityPatchBody,
-  handler: async ({ params, body, requestId }) => {
+  handler: async ({ params, body, requestId, session }) => {
     // BE 020 §5.1.2 PATCH returns the public CharityDetail shape (without
     // admin lifecycle metadata). FE doesn't read it on success — submit
     // handler discards body and router.replace('/cms/charities') — so
@@ -39,7 +39,7 @@ export const PATCH = createAdminRoute({
     // for the next render anyway.
     const { data } = await backendFetch<unknown>(
       `/cms/donation/charities/${params.id}`,
-      { method: 'PATCH', body, requestId },
+      { method: 'PATCH', body, requestId, session },
     )
     return okResponse(data)
   },

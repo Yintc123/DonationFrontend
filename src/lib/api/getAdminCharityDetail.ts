@@ -15,6 +15,7 @@ import {
   BackendAdminCharityDetail,
   type BackendAdminCharityDetail as AdminCharityDetail,
 } from '@/lib/schemas/admin-detail'
+import { getSessionService } from '@/lib/session/service'
 
 import { backendFetch } from './backend'
 
@@ -27,9 +28,14 @@ async function languageHeader(): Promise<Record<string, string> | undefined> {
 export async function fetchAdminCharityDetail(
   id: string,
 ): Promise<AdminCharityDetail> {
+  // backendFetch attaches `Authorization: Bearer ${session.accessToken}`
+  // only when `session` is explicitly provided. /cms/* endpoints are
+  // admin-gated; without the Bearer header BE returns 401 and ends the
+  // session — read the session here.
+  const session = await getSessionService().get()
   const { data } = await backendFetch<unknown>(
     `/cms/donation/charities/${id}`,
-    { headers: await languageHeader() },
+    { headers: await languageHeader(), session },
   )
   const parsed = BackendAdminCharityDetail.safeParse(data)
   if (!parsed.success) {

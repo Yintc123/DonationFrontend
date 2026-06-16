@@ -12,10 +12,11 @@ import { CharityCreateBody } from './schemas'
 
 export const POST = createAdminRoute({
   bodySchema: CharityCreateBody,
-  handler: async ({ body, requestId }) => {
+  handler: async ({ body, requestId, session }) => {
+    // Forward admin session so BE sees Bearer; /cms/* is admin-gated.
     const { data } = await backendFetch<unknown>(
       '/cms/donation/charities',
-      { method: 'POST', body, requestId },
+      { method: 'POST', body, requestId, session },
     )
     const parsed = BackendAdminCharityDetail.safeParse(data)
     if (!parsed.success) {
@@ -30,7 +31,7 @@ export const POST = createAdminRoute({
 // Spec 011a §6.2 + BE 026 §5.1.1 — admin list. Forwards to BE admin
 // endpoint which caps limit at 100; bypasses Redis cache (BE 026 §2.4).
 export const GET = createAdminRoute({
-  handler: async ({ req, requestId }) => {
+  handler: async ({ req, requestId, session }) => {
     const url = new URL(req.url)
     const requested = Number(url.searchParams.get('limit') ?? '100')
     const limit = Math.min(Math.max(1, requested || 100), 100)
@@ -42,7 +43,7 @@ export const GET = createAdminRoute({
     }
     const { data } = await backendFetch<unknown>(
       `/cms/donation/charities?${qs.toString()}`,
-      { requestId },
+      { requestId, session },
     )
     return okResponse(data)
   },

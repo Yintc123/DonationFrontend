@@ -1,7 +1,4 @@
 // Spec 011a §3 — /cms/charities admin list.
-// RSC fetches the list from BE (via v0.1 user-side fallback until BE 026
-// admin GET ships), gates on admin role, hands off rendering to a small
-// client wrapper so the AdminPageShell can sit underneath TopNav.
 
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -15,6 +12,7 @@ import {
   BackendAdminCharityListResponse,
   type BackendAdminCharityListItem,
 } from '@/lib/schemas/admin-detail'
+import { getSessionService } from '@/lib/session/service'
 import {
   ensureAdminAccess,
   requireAdminSession,
@@ -28,8 +26,13 @@ async function fetchAdminCharityList(): Promise<BackendAdminCharityListItem[]> {
   // BE 026 §5.1.1 — admin list endpoint (limit cap 100). Returns rows
   // with admin lifecycle metadata (displayOrder / publish window / etc).
   // v0.1 fetches 100 in one go; pagination chrome lands in v0.2.
+  //
+  // Pass session so backendFetch attaches Bearer — /cms/* is admin-gated
+  // on BE and a missing Authorization header returns 401.
+  const session = await getSessionService().get()
   const { data } = await backendFetch<unknown>(
     '/cms/donation/charities?limit=100',
+    { session },
   )
   const parsed = BackendAdminCharityListResponse.safeParse(data)
   if (!parsed.success) {
