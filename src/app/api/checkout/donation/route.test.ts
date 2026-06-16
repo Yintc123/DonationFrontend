@@ -223,4 +223,49 @@ describe('POST /api/checkout/donation', () => {
     const res = await POST(postReq(VALID_CHARITY_BODY), noParams)
     expect(res.status).toBe(404)
   })
+
+  // v0.7 — audit fixes
+  it('v0.7: body 省略 isAnonymous → 通過 schema（對齊 BE 022 §4.1 optional default false）', async () => {
+    let receivedBody: Record<string, unknown> | undefined
+    mockBackend(
+      'post',
+      'http://backend.test/user/v1/donation/orders/charity-donation',
+      async (req) => {
+        receivedBody = (await req.json()) as Record<string, unknown>
+        return HttpResponse.json(
+          { id: ORDER_ID, status: 'PENDING' },
+          { status: 201 },
+        )
+      },
+    )
+    const { isAnonymous: _drop, ...partial } = VALID_CHARITY_BODY
+    void _drop
+    const res = await POST(postReq(partial), noParams)
+    expect(res.status).toBe(200)
+    expect(receivedBody?.isAnonymous).toBe(false)
+  })
+
+  it('v0.7: BE 回應缺 id → 502 ContractViolationError（不靜默放行）', async () => {
+    mockBackend(
+      'post',
+      'http://backend.test/user/v1/donation/orders/charity-donation',
+      async () => HttpResponse.json({ status: 'PENDING' }, { status: 201 }),
+    )
+    const res = await POST(postReq(VALID_CHARITY_BODY), noParams)
+    expect(res.status).toBe(502)
+  })
+
+  it('v0.7: BE 回應 id 非 uuid → 502 ContractViolationError', async () => {
+    mockBackend(
+      'post',
+      'http://backend.test/user/v1/donation/orders/charity-donation',
+      async () =>
+        HttpResponse.json(
+          { id: 'not-a-uuid', status: 'PENDING' },
+          { status: 201 },
+        ),
+    )
+    const res = await POST(postReq(VALID_CHARITY_BODY), noParams)
+    expect(res.status).toBe(502)
+  })
 })

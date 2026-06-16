@@ -1,6 +1,6 @@
 # Spec 009a：`/checkout/donation` 捐款確認頁
 
-- **狀態**：Draft（v0.10 — `_endpoint` discriminator cutover `/user/v1/donation/orders/*` 對齊 BE spec 023 §2.4）
+- **狀態**：Draft（v0.11 — BE 022 contract audit fixes：§9 OQ `note` 欄位段落改寫，補 BFF schema 對齊 + 未來補 UI checklist；form / payload 行為無變動）
 - **路徑（規劃）**：
   - `src/app/checkout/donation/page.tsx`（RSC）
   - `src/app/checkout/donation/useDonorInfoForm.ts` + `.test.ts`（v0.2 — pure logic hook）
@@ -575,7 +575,7 @@ E2E 後續可加，本 v0.1 不強制。
 - **收據選項展開欄位**：個人選後是否要填統編 / 抬頭 / 地址？公司同理？等設計確認；BE 022 §11 OQ 也未決
 - **截圖未顯示完整 form 欄位**：4888 拉到底可能還有電話 / email / 地址；BE 022 body 目前不含這些欄位，FE 不擴
 - ~~**`isAnonymous` UI 缺口**：BE 三類訂單共用 `isAnonymous`，但 Figma 4888 / 4889 沒匿名 checkbox（只 IMG_4890 sale-item 有）；FE 固定送 `false`、不影響 BE optional default。未來 design 補匿名 UI 時拉到捐款流程，移除 hardcoded `false`~~ → ✅ v0.8 解決：「我要匿名捐款」checkbox 加進 Panel 2 「捐款人基本資料」（姓名 input 下方）；對齊 IMG_4890 同樣文案、視覺；FormState 加 `isAnonymous` + `SET_ANONYMOUS` Action + reducer case；buildPayload 改吃 `form.isAnonymous`；payload 型別從 `false` literal 改 `boolean`。此舉跨 charity / project / sale-item 三類確認頁統一
-- **`note` 欄位**：BE 022 body 含 `note?` (0-500 字)，FE Figma 無 UI；FE 不送，BE optional 接受
+- **`note` 欄位**：[BE 022 §4.1 / §4.2 TypeBox `note: Type.Optional(Type.Union([Type.Null(), Type.String({ maxLength: 500 })]))`](../../../backend/docs/specs/022-donation-order-api.md)；Figma 4888 / 4889 無 textarea，FE form / BFF schema 都不開、不送。BE 接受 omit。**v0.11 audit 確認**：BFF `route.ts` Zod 也沒帶 `note`；若未來設計補 UI，只需在 FormState 加 `note: string` + buildPayload 帶值 + BFF `BASE` schema 加 `note: z.string().max(500).optional()` 即可。
 - **client-side 算下次扣款日期**：v0.4 已對齊 BE UTC + 嚴格 `<` 規則；prod 改用 BE response `nextChargeAt` 為準
 - **i18n disclaimer**：街口金融科技字串 hardcode 中文；i18n 上線後抽 string table
 
@@ -595,3 +595,4 @@ E2E 後續可加，本 v0.1 不強制。
 | 0.8 | 2026-06-15 | **補「我要匿名捐款」checkbox 到 donation flow**：原本只 009b sale-item 有，依使用者要求 charity / project 捐款頁也補上（對齊 BE 022 isAnonymous 跨三類訂單）。FormState 加 `isAnonymous: boolean`、Action 加 `SET_ANONYMOUS`、reducer 加對等映射；DEFAULT_FORM.isAnonymous=false；buildPayload 從 `form.isAnonymous` 讀；payload 型別 `isAnonymous: false` literal 改 `boolean`。`<DonorInfoFormPanel>` 在姓名 input 下方加 checkbox（樣式同 [009b §6.4](./009b-purchase-confirm.md)）。Test 新增：R4/R5 reducer pure、H11 hook（勾匿名 + submit → payload.isAnonymous=true）、component 5b/5c。§9 OQ 「isAnonymous UI 缺口」標為 ✅ 已解 |
 | 0.9 | 2026-06-15 | **收據開立方式預設未選 → 姓名 input 條件渲染**：FormState `receiptOption` 從 `ReceiptOption` 改為 `ReceiptOption \| null`，DEFAULT_FORM 改 `null`；`DEFAULT_RECEIPT_OPTION` const 移除。Action `SET_RECEIPT_OPTION` value 也允許 null（使用者反悔選 placeholder）。`<select>` 新增 placeholder option（value=""、disabled、「請選擇收據開立方式」）；當 state 是 null 時 select 顯示 placeholder。**捐款人姓名 input + 匿名 checkbox 整段在 `receiptOption !== null` 時才條件渲染**（避免姓名先填、收據未選的 mismatch UX）。`isValid` + `buildPayload` 都加上「receiptOption !== null」gate；buildPayload 在斷言點做 type narrow。Test 升級：R6/R7 reducer pure、H1/H2 預期改、H2b/H3/H4/H5/H6/H8/H9/H10/H11 都先 dispatch SET_RECEIPT_OPTION；component test 4/4b/5/5b/5c/6 改成「先 selectOption 再 type」的流程；test 6 斷言 `<select>` 共 6 個 options（5 BE enum + 1 placeholder） |
 | 0.10 | 2026-06-16 | **`_endpoint` cutover 到 `/user/v1/donation/orders/*`**（對齊 [backend spec 023 §2.4](../../../backend/docs/specs/023-api-routing-versioning.md)）：§6.1 payload `DonationConfirmPayload` 兩個 discriminator 字面值（`charity-donation` / `project-donation`）、`buildPayload` 範例、§8.2 Hook integration test H5 / H6 斷言全部從 `/v1/donation/orders/*` 改 `/user/v1/donation/orders/*`。BE 022 body shape 本身無變動；FE 端只是 discriminator 字面值跟著 BE wire path 走。 |
+| 0.11 | 2026-06-16 | **BE 022 contract audit fixes**（隨 [spec 009 v0.8](./009-checkout-confirm.md)）：本 spec 對應更新 §9 OQ「`note` 欄位」改寫為較完整的「BE 接受但 UI 未開」說明 + 補上 BFF schema 也未帶 note 的事實 + 未來補 UI 的 3-點 checklist。本 spec 描述的 form state / payload / response 行為皆無變動（變動都在 BFF route + mock + 加入 6 個 BFF test），故 §5 / §6 / §8 文案不需改。 |

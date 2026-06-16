@@ -1,6 +1,6 @@
 # Spec 009b：`/checkout/purchase` 義賣商品確認頁
 
-- **狀態**：Draft（v0.8 — `_endpoint` discriminator cutover `/user/v1/donation/orders/*` 對齊 BE spec 023 §2.4）
+- **狀態**：Draft（v0.9 — BE 022 contract audit fixes：§10 OQ `note` 欄位段落改寫，補 BFF schema 對齊 + 未來補 UI checklist；form / payload 行為無變動）
 - **路徑（規劃）**：
   - `src/app/checkout/purchase/page.tsx`（RSC）
   - `src/app/checkout/purchase/useReceiptInfoForm.ts` + `.test.ts`（v0.2 — pure logic hook）
@@ -512,7 +512,7 @@ function buildPayload(
 - **匿名 vs 姓名必填**：v0.1 強制要姓名（收據用途）；商業 / 法務角度可能允許「完全匿名 = 不出收據」。等 PM 確認。BE 022 §4.3 不論 isAnonymous=true/false 都要求 `donorName` non-empty（BE side 一律 echo 原樣、由 UI 端決定是否顯示「匿名捐款者」）
 - **品項表的 SR semantic**：v0.1 用 `<div>` flex；未來考慮 table semantic 更標準
 - **多商品 / 多品項**：v0.1 假設單一 sku；BE 022 §4.3 + spec 021 也限定 `items` length 必須剛好 1（未來 cart 多 line 列為 BE OQ #3），FE 對齊一致
-- **`note` 欄位**：BE 022 §4.3 含 optional `note` (0-500 字)；Figma 4890 無 UI；FE 不送，BE optional 接受
+- **`note` 欄位**：[BE 022 §4.3 TypeBox `note: Type.Optional(Type.Union([Type.Null(), Type.String({ maxLength: 500 })]))`](../../../backend/docs/specs/022-donation-order-api.md)；Figma 4890 無 textarea，FE form / BFF schema 都不開、不送。BE 接受 omit。**v0.9 audit 確認**：BFF `route.ts` Zod 也沒帶 `note`；若未來設計補 UI，只需在 FormState 加 `note: string` + buildPayload 帶值 + BFF `Body` schema 加 `note: z.string().max(500).optional()` 即可。
 
 ---
 
@@ -528,3 +528,4 @@ function buildPayload(
 | 0.6 | 2026-06-15 | **送出成功 → 導回 sale-item detail page**：useReceiptInfoForm 加 `useRouter()`；handleSubmit 成功路徑加 `router.replace(/sale-items/${query.saleItemId})`。用 replace 不用 push（理由同 009a v0.6：confirm 頁不該留 history）。失敗不導頁。Test 升級：H5 加 `routerReplaceMock` 斷言；H8 / H9 加「失敗不導頁」反向斷言 |
 | 0.7 | 2026-06-15 | **URL query → in-memory draft store**：見 [009 §2 / §2.1](./009-checkout-confirm.md#2-routingv05--bare-path--in-memory-draft-store) 完整改寫說明。本 spec 對應更新：(a) `PurchaseCheckoutQuery` 型別移除；(b) `buildPayload` / `useReceiptInfoForm` opts 從 `{query, item}` 收成 `{draft: PurchaseDraft}`（draft 含 quantity + 完整 ItemDetail）；(c) `PurchaseConfirmPage` props 從 `{query, item}` 收成 `{draft}`；(d) page.tsx 變 RSC shell + `PurchaseConfirmPageEntry`（client）peek `purchase/draft-store.ts`，空 → `router.replace('/donation')`；(e) CtaIsland purchase 變數 `item: ItemDetail`（不再 `PurchaseItem` narrow），sheet 寫 draft 時整包 ItemDetail 帶進去；(f) submit 成功 `clearPurchaseDraft()` 再 `router.replace(/sale-items/${draft.item.id})`；(g) tests 同步重寫餵 `{ draft }` |
 | 0.8 | 2026-06-16 | **`_endpoint` cutover 到 `/user/v1/donation/orders/sale-item-purchase`**（對齊 [backend spec 023 §2.4](../../../backend/docs/specs/023-api-routing-versioning.md)）：§1 比較表 BE endpoint 行、§5.2 hook 範例 `_endpoint` 字面值與註解、§7.1 payload `PurchaseConfirmPayload._endpoint` literal + buildPayload 範例、§9.2 H5 test 斷言全部從 `/v1/donation/orders/sale-item-purchase` 改 `/user/v1/donation/orders/sale-item-purchase`。BE 022 §4.3 body shape 本身無變動。 |
+| 0.9 | 2026-06-16 | **BE 022 contract audit fixes**（隨 [spec 009 v0.8](./009-checkout-confirm.md)）：本 spec 對應更新 §10 OQ「`note` 欄位」改寫為較完整的「BE 接受但 UI 未開」說明 + 補上 BFF schema 也未帶 note 的事實 + 未來補 UI 的 3-點 checklist。本 spec 描述的 form state / payload / response 行為皆無變動（變動都在 BFF route + mock + 加入 3 個 BFF test），故 §6 / §7 / §9 文案不需改。 |

@@ -19,6 +19,7 @@ import { z } from 'zod'
 
 import { createRoute, okResponse } from '@/lib/api'
 import { backendFetch } from '@/lib/api/backend'
+import { ContractViolationError } from '@/lib/errors/ContractViolationError'
 
 const RECEIPT_OPTION = z.enum([
   'NONE',
@@ -33,9 +34,11 @@ const BILLING_DAY = z.enum(['DAY_6', 'DAY_16', 'DAY_26'])
 
 const BASE = {
   donorName: z.string().min(1).max(120),
-  // v0.5 — isAnonymous accepted as boolean across all three order types
-  // (BE 022 §4.1 / §4.2 — donation flow gained the checkbox in 009a v0.8).
-  isAnonymous: z.boolean(),
+  // v0.7 — optional default false mirrors BE 022 §4.1/§4.2 TypeBox
+  // `Type.Optional(Type.Boolean())`. Form always sends a value today, but
+  // the BFF schema is the contract with FE: future callers (e.g. a flow
+  // without the anon checkbox) shouldn't be forced to send `false`.
+  isAnonymous: z.boolean().optional().default(false),
   receiptOption: RECEIPT_OPTION,
   donationFrequency: DONATION_FREQUENCY,
   billingDay: BILLING_DAY.optional(),
@@ -66,7 +69,19 @@ const Body = z
   )
 
 type BodyShape = z.infer<typeof Body>
-type BeOrderResponse = { id: string; status: string }
+
+// v0.7 — Zod-validate BE 022 §4.1 / §4.2 response. BE returns the full
+// Order body; we only surface `{ orderId, status }` to FE, but validating
+// the two fields we read prevents silent drift if BE renames `id` → `orderId`
+// or wraps the body in another envelope. `.passthrough()` accepts all the
+// other fields (donorName / lines / charity / nextChargeAt / ...) without
+// us having to mirror BE's full Order schema here.
+const BeOrderResponse = z
+  .object({
+    id: z.string().uuid(),
+    status: z.string().min(1),
+  })
+  .passthrough()
 
 export const POST = createRoute({
   csrfExempt: true,
@@ -75,11 +90,17 @@ export const POST = createRoute({
     // Strip FE-side discriminator before forwarding — BE 022 TypeBox uses
     // `additionalProperties: false`, leaving _endpoint in would 400.
     const { _endpoint, ...forwardBody } = body as BodyShape
-    const { data } = await backendFetch<BeOrderResponse>(_endpoint, {
+    const { data } = await backendFetch<unknown>(_endpoint, {
       method: 'POST',
       body: forwardBody,
       requestId,
     })
-    return okResponse({ orderId: data.id, status: data.status })
+    const parsed = BeOrderResponse.safeParse(data)
+    if (!parsed.success) {
+      throw new ContractViolationError(
+        `Upstream ${_endpoint} response failed schema: ${parsed.error.message}`,
+      )
+    }
+    return okResponse({ orderId: parsed.data.id, status: parsed.data.status })
   },
 })
