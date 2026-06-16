@@ -1,6 +1,7 @@
 export type BffErrorCode =
   | 'VALIDATION_ERROR'
   | 'UNAUTHENTICATED'
+  | 'FORBIDDEN'
   | 'CSRF_INVALID'
   | 'NOT_FOUND'
   | 'PAYLOAD_TOO_LARGE'
