@@ -1,19 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { HttpResponse } from 'msw'
 
-const overrides = vi.hoisted(() => ({
-  nodeEnv: 'test' as 'development' | 'test' | 'production',
-  enableDevLogin: '1' as '0' | '1',
-}))
-
 vi.mock('@/lib/config', () => ({
   env: {
-    get NODE_ENV() {
-      return overrides.nodeEnv
-    },
-    get ENABLE_DEV_LOGIN() {
-      return overrides.enableDevLogin
-    },
+    NODE_ENV: 'test',
     USE_MOCK: '0',
     BACKEND_API_URL: 'http://backend.test',
     SESSION_SECRET: 'test-session-secret-must-be-32-chars-long',
@@ -23,8 +13,6 @@ vi.mock('@/lib/config', () => ({
     REDIS_KEY_PREFIX: 'jko-bff-test',
     APP_VERSION: '0.0.0-test',
     NEXT_PUBLIC_APP_NAME: 'JKODonation',
-    DEV_ADMIN_USERNAME: 'admin',
-    DEV_ADMIN_PASSWORD: 'admin-dev-password-change-me',
   },
 }))
 
@@ -48,15 +36,33 @@ import { POST } from './route'
 
 const noParams = { params: Promise.resolve({}) }
 
-function postReq(origin = 'http://localhost:3000'): Request {
+const DEFAULT_BODY = { identifier: 'admin', password: 'admin-dev-password-change-me' }
+
+function bodyStream(text: string): ReadableStream<Uint8Array> {
+  const bytes = new TextEncoder().encode(text)
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(bytes)
+      controller.close()
+    },
+  })
+}
+
+// `new Request()` strips forbidden headers like Origin, so we hand-roll a
+// Request-shaped object. parseBody() reads through `.body.getReader()`, so
+// we wrap the JSON in a real ReadableStream (matches the prod runtime).
+function postReq(
+  body: Record<string, unknown> | null = DEFAULT_BODY,
+  origin = 'http://localhost:3000',
+): Request {
   const headers = new Headers()
   headers.set('origin', origin)
   headers.set('content-type', 'application/json')
   return {
     method: 'POST',
-    url: 'http://localhost:3000/api/dev/login',
+    url: 'http://localhost:3000/api/auth/login',
     headers,
-    body: null,
+    body: body === null ? null : bodyStream(JSON.stringify(body)),
   } as unknown as Request
 }
 
@@ -103,32 +109,14 @@ function stubBeAuth(opts: { roleInJwt?: 0 | 1; roleInMe?: 0 | 1 | null } = {}) {
 
 beforeEach(() => {
   _resetMockRegistry()
-  overrides.nodeEnv = 'test'
-  overrides.enableDevLogin = '1'
   createMock.mockClear().mockResolvedValue({
     sessionId: 's'.repeat(43),
     csrfToken: 'c'.repeat(43),
   })
 })
 
-describe('POST /api/dev/login', () => {
-  it('production + ENABLE_DEV_LOGIN=0 → 404', async () => {
-    overrides.nodeEnv = 'production'
-    overrides.enableDevLogin = '0'
-    const res = await POST(postReq(), noParams)
-    expect(res.status).toBe(404)
-  })
-
-  it('development + ENABLE_DEV_LOGIN=0 → 404', async () => {
-    overrides.nodeEnv = 'development'
-    overrides.enableDevLogin = '0'
-    const res = await POST(postReq(), noParams)
-    expect(res.status).toBe(404)
-  })
-
+describe('POST /api/auth/login', () => {
   it('happy path → BE /auth/login + /auth/me + role decoded from JWT (BE /me omits role) → session ADMIN + 200', async () => {
-    overrides.nodeEnv = 'development'
-    overrides.enableDevLogin = '1'
     stubBeAuth({ roleInJwt: 0 }) // /me omits role; JWT claim wins
     const res = await POST(postReq(), noParams)
     expect(res.status).toBe(200)
@@ -141,17 +129,25 @@ describe('POST /api/dev/login', () => {
     expect((args as { role: number }).role).toBe(0)
   })
 
-  it('foreign Origin → 403', async () => {
-    overrides.nodeEnv = 'development'
-    overrides.enableDevLogin = '1'
+  it('missing body → 400 ValidationError', async () => {
     stubBeAuth()
-    const res = await POST(postReq('http://evil.com'), noParams)
+    const res = await POST(postReq(null), noParams)
+    expect(res.status).toBe(400)
+  })
+
+  it('body missing identifier → 400 ValidationError', async () => {
+    stubBeAuth()
+    const res = await POST(postReq({ password: 'x' }), noParams)
+    expect(res.status).toBe(400)
+  })
+
+  it('foreign Origin → 403', async () => {
+    stubBeAuth()
+    const res = await POST(postReq(DEFAULT_BODY, 'http://evil.com'), noParams)
     expect(res.status).toBe(403)
   })
 
   it('JWT claim role=1 → session stored as role=USER (seed not promoted)', async () => {
-    overrides.nodeEnv = 'development'
-    overrides.enableDevLogin = '1'
     stubBeAuth({ roleInJwt: 1 })
     await POST(postReq(), noParams)
     const [args] = createMock.mock.calls[0]
@@ -159,8 +155,6 @@ describe('POST /api/dev/login', () => {
   })
 
   it('BE /me returns role → /me value wins over JWT claim (future-proof)', async () => {
-    overrides.nodeEnv = 'development'
-    overrides.enableDevLogin = '1'
     stubBeAuth({ roleInJwt: 1, roleInMe: 0 })
     await POST(postReq(), noParams)
     const [args] = createMock.mock.calls[0]
@@ -168,8 +162,6 @@ describe('POST /api/dev/login', () => {
   })
 
   it('ttl values match BE accessExpiresIn / refreshExpiresIn', async () => {
-    overrides.nodeEnv = 'development'
-    overrides.enableDevLogin = '1'
     stubBeAuth({ roleInJwt: 0 })
     await POST(postReq(), noParams)
     const [args] = createMock.mock.calls[0]

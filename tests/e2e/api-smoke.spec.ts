@@ -30,11 +30,14 @@ test('GET /api/csrf without session returns 401 UNAUTHENTICATED', async ({ reque
   expect(body.error.code).toBe('UNAUTHENTICATED')
 })
 
-test('dev-login → csrf round-trip with cookie', async ({ request }) => {
-  // POST /api/dev/login is csrfExempt and dev-only; should succeed and set
-  // an iron-session cookie.
-  const login = await request.post('/api/dev/login', {
+test('auth-login → csrf round-trip with cookie', async ({ request }) => {
+  // POST /api/auth/login is csrfExempt (anonymous POST has no session to
+  // defend); on success it sets an iron-session cookie. Identifier/password
+  // here match the BE prisma/seed.ts bootstrapAdmin so the USE_MOCK=1 dev
+  // server can sign in without a real database.
+  const login = await request.post('/api/auth/login', {
     headers: { origin: 'http://localhost:3000', 'content-type': 'application/json' },
+    data: { identifier: 'admin', password: 'admin-dev-password-change-me' },
   })
   expect(login.status()).toBe(200)
   const loginBody = (await login.json()) as {

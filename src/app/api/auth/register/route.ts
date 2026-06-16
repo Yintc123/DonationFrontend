@@ -14,7 +14,7 @@
 // session id + csrf token. Either step failing leaves no session — see
 // test 5b: never half-build state.
 //
-// CSRF: csrfExempt=true, matching dev-login. Anonymous registrants have
+// CSRF: csrfExempt=true, matching /api/auth/login. Anonymous registrants have
 // no session yet, so the token-comparison gate would be unreachable; the
 // Origin/Referer check inside verifyCsrf still runs and blocks cross-site
 // POSTs.
@@ -104,7 +104,7 @@ export const POST = createRoute({
 
     // Spec 011 §3.4 / spec 007 v0.3 — BE /me does NOT carry role
     // (BE 008 §6.4). Decode the access JWT to read the role claim
-    // (mirror /api/dev/login resolveRole). BE 008 v0.x demo policy
+    // (mirror /api/auth/login resolveRole). BE 008 v0.x demo policy
     // creates self-registered accounts as ADMIN, so the JWT role lands
     // as 0 and the new session goes straight to /cms.
     const role = resolveRole(me.role, tokens.accessToken)

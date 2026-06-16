@@ -46,7 +46,7 @@ describe('LoginCard', () => {
     expect(screen.getByRole('button', { name: '登入後台' })).toBeEnabled()
   })
 
-  it('登入成功 → POST /api/dev/login + 跳 /cms', async () => {
+  it('登入成功 → POST /api/auth/login + 跳 /cms', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(new Response('{}', { status: 200 }))
@@ -56,7 +56,7 @@ describe('LoginCard', () => {
     fireEvent.change(screen.getByLabelText('密碼'), { target: { value: 'p' } })
     fireEvent.click(screen.getByRole('button', { name: '登入後台' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
-    expect(fetchMock).toHaveBeenCalledWith('/api/dev/login', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/login', expect.objectContaining({ method: 'POST' }))
     await waitFor(() => expect(routerPushMock).toHaveBeenCalledWith('/cms'))
   })
 

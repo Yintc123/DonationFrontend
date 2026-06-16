@@ -32,7 +32,6 @@ export default defineConfig({
       REDIS_PASSWORD: process.env.REDIS_PASSWORD ?? '',
       REDIS_KEY_PREFIX: process.env.REDIS_KEY_PREFIX ?? 'jko-bff-test',
       APP_VERSION: '0.0.0-test',
-      ENABLE_DEV_LOGIN: '1',
       NEXT_PUBLIC_APP_NAME: 'JKODonation',
     },
     coverage: {

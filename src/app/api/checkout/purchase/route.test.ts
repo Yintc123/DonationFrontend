@@ -28,7 +28,6 @@ vi.mock('@/lib/config', () => ({
     ALLOWED_ORIGINS: 'http://localhost:3000',
     REDIS_KEY_PREFIX: 'jko-bff-test',
     APP_VERSION: '0.0.0-test',
-    ENABLE_DEV_LOGIN: '1',
     NEXT_PUBLIC_APP_NAME: 'JKODonation',
   },
 }))

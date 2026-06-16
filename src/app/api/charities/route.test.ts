@@ -27,7 +27,6 @@ vi.mock('@/lib/config', () => ({
     REDIS_CONNECT_TIMEOUT_MS: 2000,
     REDIS_COMMAND_TIMEOUT_MS: 1000,
     APP_VERSION: '0.0.0-test',
-    ENABLE_DEV_LOGIN: '1',
     NEXT_PUBLIC_APP_NAME: 'JKODonation',
   },
 }))

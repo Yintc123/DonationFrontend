@@ -48,8 +48,8 @@ registerMock(
 // —— Categories dictionary ——
 registerMock('/user/v1/donation/categories', categoriesListHandler)
 
-// —— Auth bridge (USE_MOCK=1 dev-login / register paths) ——
-// BE 023 §2.1 — Auth surface is unprefixed; dev-login posts /auth/login
+// —— Auth bridge (USE_MOCK=1 login / register paths) ——
+// BE 023 §2.1 — Auth surface is unprefixed; /api/auth/login posts /auth/login
 // then GETs /auth/me, so both must resolve to keep the e2e smoke green.
 registerMock('/auth/login', loginHandler)
 registerMock('/auth/me', meHandler)

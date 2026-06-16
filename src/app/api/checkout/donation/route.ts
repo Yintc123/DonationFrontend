@@ -10,7 +10,7 @@
 // confirm-payment is called here — that's a separate step the spec leaves
 // for a future "付款選擇頁".
 //
-// CSRF: csrfExempt=true, matching dev-login's anonymous-POST pattern. The
+// CSRF: csrfExempt=true, matching /api/auth/login's anonymous-POST pattern. The
 // BE endpoints themselves are unauthenticated (BE 022 §2.1), so there's
 // no session cookie to defend.
 

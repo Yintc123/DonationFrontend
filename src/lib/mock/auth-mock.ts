@@ -1,14 +1,14 @@
-// USE_MOCK=1 stand-ins for the BE auth bridge that `/api/dev/login` and
+// USE_MOCK=1 stand-ins for the BE auth bridge that `/api/auth/login` and
 // `/api/auth/register` invoke. We don't run a real backend in mock mode,
-// so without these handlers the dev-login e2e smoke 502s the moment it
-// hits `backendFetch('/auth/login')`.
+// so without these handlers the login e2e smoke 502s the moment it hits
+// `backendFetch('/auth/login')`.
 //
 // /auth/login returns a token bundle shaped to BackendRegisterResponse
 // (Spec 007 §5.4) with a parseable JWT carrying `role: 0` (ADMIN) so
-// resolveRole() in dev-login decodes the right admin session.
+// resolveRole() in the BFF login route decodes the right admin session.
 //
 // /auth/me mirrors BE 008 §6.4 — note `role` is intentionally absent;
-// the dev-login route relies on the JWT claim, and tests for the
+// the BFF login route relies on the JWT claim, and tests for the
 // JWT-only fallback would silently regress if we leaked role here.
 
 import 'server-only'

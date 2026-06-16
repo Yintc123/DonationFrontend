@@ -1,15 +1,11 @@
-// Spec 011 §3.4 (v0.3) — dev login bridges to BE auth so the issued
-// session carries a real JWT. Accepts optional `{ identifier, password }`
-// body for caller-provided credentials (LoginCard form); falls back to
-// env DEV_ADMIN_USERNAME / DEV_ADMIN_PASSWORD when body is absent
-// (skip-login style API call / scripts).
+// Spec 005 §3 — homepage password login. Bridges to BE /auth/login so the
+// issued session carries a real JWT. Symmetric with /api/auth/register.
 //
 //   1. POST /auth/login  { identifier, password }  → tokens
 //   2. GET  /auth/me     Bearer ${access}          → user (role from JWT)
 //   3. getSessionService().create(...)
 //
-// Disabled in production / when ENABLE_DEV_LOGIN=0. csrfExempt=true —
-// unauthenticated anonymous POST has no session to defend.
+// csrfExempt=true — unauthenticated anonymous POST has no session to defend.
 
 import 'server-only'
 import { z } from 'zod'
@@ -17,9 +13,7 @@ import { z } from 'zod'
 import { createRoute } from '@/lib/api'
 import { backendFetch } from '@/lib/api/backend'
 import { decodeJwtPayload } from '@/lib/auth/decodeJwtPayload'
-import { env } from '@/lib/config'
 import { ContractViolationError } from '@/lib/errors/ContractViolationError'
-import { NotFoundError } from '@/lib/errors/NotFoundError'
 import { getSessionService } from '@/lib/session/service'
 import { Role, type RoleValue } from '@/lib/session/types'
 import {
@@ -27,13 +21,10 @@ import {
   BackendRegisterResponse as BackendLoginResponse,
 } from '@/lib/schemas/auth'
 
-// Optional body — both fields together or neither (env fallback).
-const LoginBody = z
-  .object({
-    identifier: z.string().min(1).max(254).optional(),
-    password: z.string().min(1).max(256).optional(),
-  })
-  .optional()
+const LoginBody = z.object({
+  identifier: z.string().min(1).max(254),
+  password: z.string().min(1).max(256),
+})
 
 const NO_STORE_HEADERS = {
   'content-type': 'application/json',
@@ -57,14 +48,7 @@ export const POST = createRoute({
   csrfExempt: true,
   bodySchema: LoginBody,
   handler: async ({ body, requestId }) => {
-    if (env.NODE_ENV === 'production' || env.ENABLE_DEV_LOGIN !== '1') {
-      throw new NotFoundError('dev login disabled')
-    }
-
-    // Use caller-supplied credentials if both present; otherwise the
-    // env-seeded fallback (matches BE prisma/seed.ts bootstrapAdmin).
-    const identifier = body?.identifier ?? env.DEV_ADMIN_USERNAME
-    const password = body?.password ?? env.DEV_ADMIN_PASSWORD
+    const { identifier, password } = body
 
     // Step 1 — BE /auth/login
     const { data: rawTokens } = await backendFetch<unknown>('/auth/login', {

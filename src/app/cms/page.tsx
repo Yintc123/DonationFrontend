@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 /**
  * Spec 005 — 登入後 CMS placeholder
  *
- * 首頁 LoginCard 登入成功（POST /api/dev/login 200）/ 註冊 spec 007 成功
+ * 首頁 LoginCard 登入成功（POST /api/auth/login 200）/ 註冊 spec 007 成功
  * 後，router.push 到這裡。目前只是 placeholder；session 資訊 / CMS
  * 功能後續再補。
  *

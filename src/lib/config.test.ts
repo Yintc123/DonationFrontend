@@ -16,7 +16,6 @@ const REAL_ENV = {
   REDIS_CONNECT_TIMEOUT_MS: '2000',
   REDIS_COMMAND_TIMEOUT_MS: '1000',
   APP_VERSION: '0.0.0',
-  ENABLE_DEV_LOGIN: '0',
   NEXT_PUBLIC_APP_NAME: 'JKODonation',
 }
 
@@ -107,16 +106,6 @@ describe('config', () => {
         ALLOWED_ORIGINS: 'http://localhost:3000,http://localhost:4000',
       }),
     ).rejects.toThrow(/ALLOWED_ORIGINS/)
-  })
-
-  it('production + ENABLE_DEV_LOGIN=1 → throws', async () => {
-    await expect(
-      loadConfig({
-        NODE_ENV: 'production',
-        ALLOWED_ORIGINS: 'https://example.com',
-        ENABLE_DEV_LOGIN: '1',
-      }),
-    ).rejects.toThrow(/ENABLE_DEV_LOGIN/)
   })
 
   it('SESSION_SECRET < 32 chars → throws', async () => {

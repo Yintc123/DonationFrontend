@@ -1,10 +1,11 @@
 // Spec 011 §3.4 — read claims out of an access JWT we just got from BE.
 //
 // BE /auth/me does NOT return `role` (it's a JWT-only claim per spec
-// 007 §10.10), so dev-login / OAuth callback must decode the access
-// token to know whether the session belongs to an admin. We don't
-// verify the signature — the token came from BE through a trusted
-// fetch — we just split on '.' and base64url-decode the middle slice.
+// 007 §10.10), so the /auth/login / /auth/register / OAuth callback
+// BFF routes must decode the access token to know whether the session
+// belongs to an admin. We don't verify the signature — the token came
+// from BE through a trusted fetch — we just split on '.' and
+// base64url-decode the middle slice.
 
 const PADDING = '='
 

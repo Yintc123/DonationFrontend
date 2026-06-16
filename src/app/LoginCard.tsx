@@ -4,11 +4,11 @@ import { useRouter } from 'next/navigation'
 import { Field } from './auth/Field'
 
 /**
- * Spec 005 — 首頁登入卡片（demo 用）
+ * Spec 005 — 首頁登入卡片
  *
- * 帳密欄位目前**僅做客端非空驗證**；送出時呼叫 POST /api/dev/login（不
- * 帶 payload，本機 dev 模式只要 `ENABLE_DEV_LOGIN=1` 就回 session）。
- * 成功 → /cms；失敗 → 顯示 inline 錯誤。
+ * 帳密欄位目前**僅做客端非空驗證**；送出時呼叫 POST /api/auth/login，BFF
+ * 橋接 BE /auth/login + /auth/me → iron-session。成功 → /cms；失敗 → 顯示
+ * inline 錯誤。
  *
  * 「建立帳號」按鈕純前端導航 → /register（spec 007 v0.2；目前 placeholder，
  * spec 已對齊 BE spec 008 v0.6 帳密註冊 contract，待 hook + BFF 實作）。
@@ -28,7 +28,7 @@ export function LoginCard() {
     setError(null)
     startTransition(async () => {
       try {
-        const res = await fetch('/api/dev/login', {
+        const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ identifier: username, password }),
