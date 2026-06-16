@@ -70,7 +70,7 @@ import type { StoredSession } from '@/lib/session/types'
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 export type VerifyCsrfOptions = {
-  /** true 時跳過 token 比對（仍檢查 Origin 白名單），用於 chicken-and-egg 端點如 `/api/csrf` / `/api/dev/login` */
+  /** true 時跳過 token 比對（仍檢查 Origin 白名單），用於 chicken-and-egg 端點如 `/api/csrf` / `/api/auth/login` */
   exempt?: boolean
 }
 
@@ -148,7 +148,7 @@ export function extractOriginFromReferer(req: Request): string | null {
 | `requireAuth` | `csrfExempt` | 典型用途 |
 |---|---|---|
 | `false` | `false` | 公開讀取端點（GET 列表）|
-| `false` | `true` | Chicken-and-egg 寫入：`/api/dev/login`、OAuth callback |
+| `false` | `true` | Chicken-and-egg 寫入：`/api/auth/login`、`/api/auth/register`、OAuth callback |
 | `true` | `false` | **多數寫入端點**（要 session + CSRF token）|
 | `true` | `true` | 罕見：已有 session 但 CSRF 用其他機制（如 logout 用 state 參數）。**Code review 必須質疑** |
 

@@ -199,7 +199,6 @@ const RawEnv = z.object({
 
   APP_VERSION: z.string().default('0.0.0'),       // 給 /api/health 用
   APP_COMMIT: z.string().optional(),              // 給 /api/health 用
-  ENABLE_DEV_LOGIN: z.enum(['0', '1']).default('0'),  // 給 /api/dev/login 用（001g §4）
   NEXT_PUBLIC_APP_NAME: z.string().default('JKODonation'),
 }).superRefine((env, ctx) => {
   // USE_MOCK=0 時：BACKEND_API_URL、REDIS_URL 必填
@@ -214,10 +213,6 @@ const RawEnv = z.object({
     if (list.length === 0 || list.every(o => o.startsWith('http://localhost'))) {
       ctx.addIssue({ code: 'custom', path: ['ALLOWED_ORIGINS'], message: 'production requires non-localhost origins' })
     }
-  }
-  // production 不允許 dev login（第二道防線；首道在 route handler 內）
-  if (env.NODE_ENV === 'production' && env.ENABLE_DEV_LOGIN === '1') {
-    ctx.addIssue({ code: 'custom', path: ['ENABLE_DEV_LOGIN'], message: 'must not be enabled in production' })
   }
 })
 
@@ -245,7 +240,6 @@ export const env = RawEnv.parse(process.env)
 | `REDIS_COMMAND_TIMEOUT_MS` | server | — | `1000` | 單一 command timeout |
 | `APP_VERSION` | server | — | `0.0.0` | `/api/health` 回傳用 |
 | `APP_COMMIT` | server | — | — | `/api/health` 回傳用 |
-| `ENABLE_DEV_LOGIN` | server | — | `'0'` | `'1'` 啟用 `/api/dev/login`；production 啟動拒絕 |
 | `NEXT_PUBLIC_APP_NAME` | client + server | — | `JKODonation` | UI 顯示用 |
 
 `.env.example` 同步更新。
@@ -267,10 +261,6 @@ export const REFRESH_POLLER_INTERVAL_MS = 50         // 001c §3
 export const FRESH_TOKENS_TTL_MS = 60_000            // 001c §3
 export const CSRF_TOKEN_BYTES = 32                   // 001d §2 → 43-char base64url
 export const SESSION_ID_BYTES = 32                   // 001b §2 → 43-char base64url
-
-// ADR 004：access 3h、refresh 30d。給 /api/dev/login 簽 fake token 用（001g §4）
-export const DEV_LOGIN_ACCESS_TTL_MS = 3 * 60 * 60 * 1_000
-export const DEV_LOGIN_REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1_000
 
 // Cloud Run SIGTERM → 10s 內必須結束；留 2s 給 runtime + log flush，所以 8s deadline
 export const SHUTDOWN_DEADLINE_MS = 8_000             // 001g §5
@@ -446,7 +436,6 @@ export function resolveMock(path: string): MockHandler | undefined { return regi
 - `USE_MOCK=0` 時 `BACKEND_API_URL` / `REDIS_URL` 必填，否則 throw
 - `SESSION_SECRET` 缺漏 → 不論 `USE_MOCK` 值都 throw
 - `production` 的 `ALLOWED_ORIGINS` 守門：空 / 僅 localhost → throw
-- `production` + `ENABLE_DEV_LOGIN=1` → throw
 
 ### 9.2 `errors/toErrorResponse`
 

@@ -2,11 +2,11 @@
 
 - **狀態**：Draft
 - **建立日期**：2026-06-13
-- **影響範圍**：`src/app/api/{csrf,health,health/live,dev/login}/route.ts`、`src/lib/lifecycle.ts`、`src/instrumentation.ts`
+- **影響範圍**：`src/app/api/{csrf,health,health/live,auth/login}/route.ts`、`src/lib/lifecycle.ts`、`src/instrumentation.ts`
 - **依賴**：
   - [001a foundations](./001a-foundations.md)（`env`、errors、log）
   - [001b session-store](./001b-session-store.md)（`getSessionStore` 用於 health ping & shutdown）
-  - [001c session-service](./001c-session-service.md)（`getSessionService` 用於 csrf / dev-login）
+  - [001c session-service](./001c-session-service.md)（`getSessionService` 用於 csrf / login）
   - [001d security-csrf](./001d-security-csrf.md)（CSRF 防護由 createRoute 透傳）
   - [001f createRoute](./001f-create-route.md)（`createRoute` / `okResponse`）
 - **下游**：無（本 spec 為 Spec 001 系列最末端）
@@ -19,7 +19,7 @@
 - `GET /api/csrf`：客戶端取 CSRF token（§2）
 - `GET /api/health`：readiness（含 Redis ping）（§3.1）
 - `GET /api/health/live`：liveness（不檢查依賴）（§3.2）
-- `POST /api/dev/login`：dev mock session bootstrap（§4）
+- `POST /api/auth/login`：BFF 帳密登入橋接（§4；v0.2 — 原 `/api/dev/login`）
 - `src/lib/lifecycle.ts` + `src/instrumentation.ts`：SIGTERM/SIGINT graceful shutdown（§5）
 
 ---
@@ -124,58 +124,53 @@ export const GET = createRoute({
 
 ---
 
-## 4. Dev mock session bootstrap（`POST /api/dev/login`）
+## 4. 帳密登入橋接（`POST /api/auth/login`）
 
-需登入的 endpoint 在 dev 期間沒有 OAuth 流程可走，本節定義「dev 啟動後 5 秒內就能測 auth 路徑」的最小方案。
+> **v0.2（2026-06-17）**：原 `/api/dev/login` — 設計時為 dev-only fake-token bootstrap；隨著 BE `/auth/login` 上線，v0.3 起改為「真實帳密 → BE bridge」，命名仍掛 `dev/` 已誤導。本版改名為 `/api/auth/login` 並拿掉 `ENABLE_DEV_LOGIN` env gate 與 `DEV_ADMIN_*` 預設 fallback。
 
 ### 4.1 端點
 
 ```
-POST /api/dev/login
-  body 可選：{ user?: { id, name }, ttlHours?: number }
+POST /api/auth/login
+  body：{ identifier: string, password: string }
   回應：{ data: { sessionId, csrfToken, user, expiresAt } }
 ```
 
-僅當以下**全部**成立時可用：
-
-| 條件 | 防線 |
-|---|---|
-| `env.NODE_ENV !== 'production'` | 啟動時 route 直接 throw `NotFoundError`，回 404 |
-| `env.ENABLE_DEV_LOGIN === '1'` | 額外白名單；prod 容器設定 `'0'` 防誤啟 |
-
-兩道防線**並用**，避免「測試環境 NODE_ENV 設成 production」之類誤設定。
+不再有「dev-only 環境 gate」。生產環境一樣會 expose 這條 endpoint；BE `/auth/login` 自身的 rate-limit / lock-out 才是真正的防線（BE spec 008 §5 / §8.2）。
 
 ### 4.2 實作
 
 ```ts
-// src/app/api/dev/login/route.ts
+// src/app/api/auth/login/route.ts
 import 'server-only'
-import { env } from '@/lib/config'
+import { z } from 'zod'
+import { createRoute } from '@/lib/api'
+import { backendFetch } from '@/lib/api/backend'
+import { decodeJwtPayload } from '@/lib/auth/decodeJwtPayload'
+import { ContractViolationError } from '@/lib/errors/ContractViolationError'
 import { getSessionService } from '@/lib/session/service'
-import { NotFoundError } from '@/lib/errors/NotFoundError'
-import { okResponse, createRoute } from '@/lib/api'
-import { DEV_LOGIN_ACCESS_TTL_MS, DEV_LOGIN_REFRESH_TTL_MS } from '@/lib/api/constants'
+import { Role, type RoleValue } from '@/lib/session/types'
+import {
+  BackendMeResponse,
+  BackendRegisterResponse as BackendLoginResponse,
+} from '@/lib/schemas/auth'
 
-const DEV_USER = { id: 'dev-user-1', name: 'Dev User' }
+const LoginBody = z.object({
+  identifier: z.string().min(1).max(254),
+  password: z.string().min(1).max(256),
+})
 
 export const POST = createRoute({
-  csrfExempt: true,                    // chicken-and-egg：首次 login 前 client 沒 csrfToken
-  handler: async () => {
-    if (env.NODE_ENV === 'production' || env.ENABLE_DEV_LOGIN !== '1') {
-      throw new NotFoundError('dev login disabled')
-    }
-    const now = Date.now()
-    // TTL 常數對齊 ADR 004（access 3h / refresh 30d），定義在 001a §4
-    const result = await getSessionService().create({
-      user: DEV_USER,
-      tokens: {
-        accessToken: 'dev-fake-access-token',
-        accessTokenExpiresAt: now + DEV_LOGIN_ACCESS_TTL_MS,
-        refreshToken: 'dev-fake-refresh-token',
-        refreshTokenExpiresAt: now + DEV_LOGIN_REFRESH_TTL_MS,
-      },
+  csrfExempt: true, // anonymous POST has no session to defend
+  bodySchema: LoginBody,
+  handler: async ({ body, requestId }) => {
+    const { data: rawTokens } = await backendFetch<unknown>('/auth/login', {
+      method: 'POST',
+      body,
+      requestId,
+      passClientErrors: true,
     })
-    return okResponse({ ...result, user: DEV_USER, expiresAt: now + DEV_LOGIN_ACCESS_TTL_MS })
+    // ...parse, fetch /auth/me, decode role from JWT, create session
   },
 })
 ```
@@ -184,16 +179,14 @@ export const POST = createRoute({
 
 | 組合 | 結果 | 用途 |
 |---|---|---|
-| `USE_MOCK=1` + dev login | 完全本機跑；backend 不必啟動，fake token 不會被驗證 | **dev 預設模式** |
-| `USE_MOCK=0` + dev login | session 已建但 fake token 打真 backend 會 401 | 不建議；應走真實 OAuth flow |
-| `USE_MOCK=0` + 真實登入 flow | 正式流程；本 spec 範圍外（`auth-login.md`）| 整合測試 / production |
+| `USE_MOCK=1` + `/api/auth/login` | BFF 把 `{ identifier, password }` 打到 mock `/auth/login`（[`src/lib/mock/auth-mock.ts`](../../src/lib/mock/auth-mock.ts)），mock 不驗證任何欄位，固定回 admin token bundle | **dev / e2e 預設模式** |
+| `USE_MOCK=0` + `/api/auth/login` | BFF 打真 BE `/auth/login`，session 帶真 JWT；後續 backendFetch 帶 Bearer 通過 | 整合測試 / production |
 
 ### 4.4 CSRF 與 Origin
 
-`/api/dev/login` 為 POST，理論上需 CSRF；但：
-- 第一次呼叫時 client 還沒 session、沒 csrfToken（chicken-and-egg）
-- Route 定義加 `csrfExempt: true`（見 001d §5、001f §2）即可（與 `/api/csrf` 同處理）
+- 第一次呼叫時 client 還沒 session、沒 csrfToken（chicken-and-egg）→ `csrfExempt: true`（見 001d §5、001f §2）
 - Origin 檢查**仍照常**（屬白名單，dev 必含 `http://localhost:3000`）
+- 對照組：[`/api/auth/register`](../../src/app/api/auth/register/route.ts) 採同 pattern
 
 ---
 
@@ -305,15 +298,14 @@ export interface SessionStore {
 - 一律 200 `{ data: { status: 'ok' } }`
 - **不**呼叫 `store.ping()`（驗證：mock store ping 拋錯，本 endpoint 仍 200）
 
-### 6.4 `/api/dev/login`（POST）
+### 6.4 `/api/auth/login`（POST）
 
-- `NODE_ENV=production` + `ENABLE_DEV_LOGIN=1` → env 驗證失敗（啟動拒絕，整支 process 起不來；於 001a §9.1 已涵蓋）
-- `NODE_ENV=production` + `ENABLE_DEV_LOGIN=0` → 路由回 404
-- `NODE_ENV=development` + `ENABLE_DEV_LOGIN=0` → 路由回 404
-- `NODE_ENV=development` + `ENABLE_DEV_LOGIN=1` → 200，session 建立成功；回 `{ sessionId, csrfToken, user, expiresAt }`
+- happy path（合法 identifier + password）→ 200，session 建立成功；回 `{ sessionId, csrfToken, user, expiresAt }`
+- body 缺 / 缺欄位 → 400 VALIDATION_FAILED
 - 後續對需 auth 的 endpoint 請求帶 cookie → 通過 auth 檢查（整合測試）
 - `csrfExempt: true` 生效：POST 不帶 X-CSRF-Token 仍通過
 - Origin 不在白名單 → 仍 403（驗證 csrfExempt 不影響 origin 檢查）
+- BE `/auth/me` 不帶 role → 改 decode access JWT 的 `role` claim（spec 008 §6.4；對齊 [`decodeJwtPayload`](../../src/lib/auth/decodeJwtPayload.ts)）
 
 ### 6.5 Graceful shutdown
 
@@ -330,7 +322,7 @@ export interface SessionStore {
 - [ ] `src/app/api/csrf/route.ts`：§2.2 程式碼通過 §6.1 案例
 - [ ] `src/app/api/health/route.ts`：§3.1 程式碼通過 §6.2 案例（Redis ping、503 degraded）
 - [ ] `src/app/api/health/live/route.ts`：§3.2 程式碼通過 §6.3 案例（liveness 不檢查依賴）
-- [ ] `src/app/api/dev/login/route.ts`：§4.2 程式碼通過 §6.4 案例；含 `csrfExempt: true`
+- [ ] `src/app/api/auth/login/route.ts`：§4.2 程式碼通過 §6.4 案例；含 `csrfExempt: true`
 - [ ] `src/lib/lifecycle.ts`：§5.1 程式碼通過 §6.5 案例
 - [ ] `src/instrumentation.ts`：§5.2 程式碼存在；本機跑 `pnpm dev` 啟動時看到 `bff.shutdown.begin` log（kill 後）
 - [ ] **無業務字眼**（grep 不到 `charity|donation|jko[^_-]`；前綴 `jko-` / `jko_` 允許）

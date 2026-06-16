@@ -53,7 +53,7 @@ type RouteOptions<TBody, TQuery, TParams, TAuth extends boolean> = {
   paramsSchema?: ZodType<TParams>
   /**
    * 豁免 CSRF token 比對（仍檢查 Origin 白名單）。僅用於 chicken-and-egg 端點：
-   * `/api/csrf`、`/api/dev/login`、OAuth callback（由 state 參數防 CSRF）。
+   * `/api/csrf`、`/api/auth/login`、`/api/auth/register`、OAuth callback（由 state 參數防 CSRF）。
    * 預設 false。
    */
   csrfExempt?: boolean

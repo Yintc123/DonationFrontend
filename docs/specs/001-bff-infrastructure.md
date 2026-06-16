@@ -22,7 +22,7 @@
 
 **範圍內（散見子 spec）**
 - `src/app/api/*/route.ts` 的**通用模式**與 `createRoute` wrapper
-- `src/app/api/csrf/route.ts`、`src/app/api/health/route.ts`、`src/app/api/dev/login/route.ts`（基礎設施端點）
+- `src/app/api/csrf/route.ts`、`src/app/api/health/route.ts`、`src/app/api/auth/login/route.ts`（基礎設施端點）
 - `src/lib/{api,session,security,schemas,errors,config,mock,log}/*`
 - `src/instrumentation.ts` + `src/lib/lifecycle.ts`（graceful shutdown）
 
@@ -92,7 +92,7 @@ Browser ──▶ createRoute
 | [001d security-csrf](./001d-security-csrf.md) | CSRF 驗證、Origin 白名單、route-level `csrfExempt` 設計 | `src/lib/security/{verifyCsrf,origin}.ts` |
 | [001e backendFetch](./001e-backend-fetch.md) | BFF → backend HTTP wrapper、timeout、401 分流、mock 短路 | `src/lib/api/backend.ts` |
 | [001f createRoute](./001f-create-route.md) | Route Handler 高階 wrapper、parsers、okResponse、request-id | `src/lib/api/{create-route,parsers,responses,request-id}.ts` |
-| [001g routes-and-lifecycle](./001g-routes-and-lifecycle.md) | `/api/csrf`、`/api/health`、`/api/dev/login`、graceful shutdown | `src/app/api/{csrf,health,health/live,dev/login}/route.ts`、`src/lib/lifecycle.ts`、`src/instrumentation.ts` |
+| [001g routes-and-lifecycle](./001g-routes-and-lifecycle.md) | `/api/csrf`、`/api/health`、`/api/auth/login`、graceful shutdown | `src/app/api/{csrf,health,health/live,auth/login}/route.ts`、`src/lib/lifecycle.ts`、`src/instrumentation.ts` |
 
 ### 3.1 推薦實作順序
 

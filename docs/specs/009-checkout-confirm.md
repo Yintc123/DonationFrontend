@@ -189,7 +189,7 @@ TopNav + 紅 hero + `<form>` + sticky CTA 整套外殼實作於 [`<ConfirmPageSh
 2. **Strip `_endpoint`**：BE TypeBox `additionalProperties: false`，留著會 400
 3. **`backendFetch` POST 給 BE 對應 endpoint**
 4. **回傳 `{ data: { orderId, status } }`** — FE confirm 頁只用這兩個欄位（未來付款頁可能要 orderId 串 confirm-payment）
-5. **CSRF**：`csrfExempt: true`，跟 dev-login 同 pattern——BE 端 endpoint 本身 unauth，FE 沒 session token 可帶
+5. **CSRF**：`csrfExempt: true`，跟 `/api/auth/login` 同 pattern——BE 端 endpoint 本身 unauth，FE 沒 session token 可帶
 6. **錯誤透傳**：4xx / 5xx 透過既有 `toErrorResponse` 包裝（spec 005 / 006）
 
 ```ts
