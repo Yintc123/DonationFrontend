@@ -57,9 +57,17 @@ export const POST = createRoute({
     // Step 1 — BE register, returns tokens only. `passClientErrors` so that
     // 400 VALIDATION_FAILED / 409 AUTH_USERNAME_TAKEN / 429 AUTH_RATE_LIMITED
     // propagate to the FE with their original status (spec 007 §5.4).
+    //
+    // Spec 007 v0.4 / BE 008 demo policy: stamp `role: 0` (ADMIN) on the
+    // BE request so every self-registered account lands as admin. BE
+    // accepts `role` as optional (route schema {0,1}); omit → DB default
+    // USER. We send 0 explicitly rather than trust the form payload so
+    // a tampered client can't escape admin and a future form change
+    // doesn't silently drop role.
+    const upstreamBody = { ...body, role: Role.ADMIN }
     const { data: rawTokens } = await backendFetch<unknown>(
       '/auth/register',
-      { method: 'POST', body, requestId, passClientErrors: true },
+      { method: 'POST', body: upstreamBody, requestId, passClientErrors: true },
     )
     const tokensParsed = BackendRegisterResponse.safeParse(rawTokens)
     if (!tokensParsed.success) {

@@ -110,11 +110,17 @@ function postReq(
   } as unknown as Request
 }
 
+/** Captured request bodies the BE mocks observed during a test. */
+const capturedRegisterBody = { value: undefined as unknown }
+
 function mockBackendOk(opts?: { meStatus?: number; meBody?: unknown }): void {
   mockBackend(
     'post',
     'http://backend.test/auth/register',
-    async () => HttpResponse.json(BE_REGISTER_OK, { status: 200 }),
+    async (req) => {
+      capturedRegisterBody.value = await req.json()
+      return HttpResponse.json(BE_REGISTER_OK, { status: 200 })
+    },
   )
   mockBackend(
     'get',
@@ -133,6 +139,7 @@ beforeEach(() => {
     sessionId: 's'.repeat(43),
     csrfToken: 'c'.repeat(43),
   })
+  capturedRegisterBody.value = undefined
 })
 
 describe('POST /api/auth/register', () => {
@@ -172,6 +179,9 @@ describe('POST /api/auth/register', () => {
       role: 0, // BE 008 demo policy: self-register lands as ADMIN; FE decodes JWT
     })
     expect(body.data.expiresAt).toBeGreaterThan(now)
+    // Spec 007 v0.4 — BFF stamps role:0 (ADMIN) when forwarding to BE so
+    // self-registered accounts always land as admin in this demo project.
+    expect(capturedRegisterBody.value).toMatchObject({ role: 0 })
   })
 
   it('2: body schema fail (username 太短) → 400 VALIDATION_ERROR、不打 backend', async () => {
