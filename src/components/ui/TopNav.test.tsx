@@ -10,9 +10,16 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/donation',
 }))
 
+const hasNavigatedMock = vi.fn(() => false)
+vi.mock('@/lib/hooks/useInAppNav', () => ({
+  useHasInAppNavigated: () => hasNavigatedMock(),
+}))
+
 beforeEach(() => {
   routerBackMock.mockReset()
   routerPushMock.mockReset()
+  hasNavigatedMock.mockReset()
+  hasNavigatedMock.mockReturnValue(false)
 })
 
 describe('TopNav', () => {
@@ -42,6 +49,24 @@ describe('TopNav', () => {
     render(<TopNav title="公益團體介紹" fallback="/donation" />)
     await userEvent.click(screen.getByRole('button', { name: '返回' }))
     expect(routerPushMock).toHaveBeenCalledWith('/donation')
+  })
+
+  it('backHref 設了 → 無視 smart-back，即使「站內已動過」也 push(backHref)', async () => {
+    // 關鍵：mock useHasInAppNavigated 回 true（站內已動過、smart-back 本來會 router.back）
+    // backHref 必須蓋掉這條路徑、強制 push。
+    hasNavigatedMock.mockReturnValue(true)
+    render(<TopNav title="所有捐款項目" backHref="/" />)
+    await userEvent.click(screen.getByRole('button', { name: '返回' }))
+    expect(routerPushMock).toHaveBeenCalledWith('/')
+    expect(routerBackMock).not.toHaveBeenCalled()
+  })
+
+  it('onBack 優先於 backHref（onBack 是 escape hatch）', async () => {
+    const onBack = vi.fn()
+    render(<TopNav title="x" onBack={onBack} backHref="/" />)
+    await userEvent.click(screen.getByRole('button', { name: '返回' }))
+    expect(onBack).toHaveBeenCalledTimes(1)
+    expect(routerPushMock).not.toHaveBeenCalled()
   })
 
   it('accessory prop 渲染在右側', () => {

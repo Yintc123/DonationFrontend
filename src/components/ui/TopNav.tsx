@@ -1,5 +1,6 @@
 'use client'
 import type { ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 
 import { useSmartBack } from '@/lib/hooks/useSmartBack'
 
@@ -14,6 +15,13 @@ type TopNavProps = {
   onBack?: () => void
   /** smart back 的 fallback 目的地，預設 `/`（spec 005 §3 「回首頁」） */
   fallback?: string
+  /**
+   * 強制返回到指定路徑、無視 smart-back。設了 → 點返回一律
+   * `router.push(backHref)`（即使站內已動過）。給「top-level
+   * landing 頁」用（/donation、/cms），這些頁面語意上「返回 = 回首頁」、
+   * 不該依賴 history 深度。優先級：`onBack` > `backHref` > smart-back。
+   */
+  backHref?: string
   /** 右側 optional 附件（如詳情頁分享按鈕） */
   accessory?: ReactNode
 }
@@ -22,10 +30,13 @@ export function TopNav({
   title,
   onBack,
   fallback = '/',
+  backHref,
   accessory,
 }: TopNavProps) {
+  const router = useRouter()
   const smartBack = useSmartBack(fallback)
-  const handleBack = onBack ?? smartBack
+  const handleBack =
+    onBack ?? (backHref !== undefined ? () => router.push(backHref) : smartBack)
   return (
     <header
       data-component="TopNav"
