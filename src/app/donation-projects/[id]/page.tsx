@@ -51,7 +51,7 @@ export default async function Page({ params }: PageProps) {
         fallback={pickFallbackImage('donation', donation.id)}
         alt={donation.name}
       />
-      <div data-component="InfoPanel" className="mx-3 -mt-4 bg-surface-card rounded-2xl shadow-[0_0_40px_8px_rgba(255,255,255,0.9)] ring-1 ring-black/5 relative z-10 p-5 space-y-4">
+      <div data-component="InfoPanel" className="mx-3 -mt-4 bg-surface-card rounded-2xl relative z-10 p-5 space-y-4">
         <h1 className="text-base font-semibold text-ink-AAA leading-7">
           {donation.name}
         </h1>
@@ -65,7 +65,7 @@ export default async function Page({ params }: PageProps) {
         )}
       </div>
       <div className="flex-1 mx-3 mt-3">
-        <section data-component="ContentSection" className="bg-surface-card rounded-2xl shadow-[0_0_40px_8px_rgba(255,255,255,0.9)] ring-1 ring-black/5 p-5">
+        <section data-component="ContentSection" className="bg-surface-card rounded-2xl p-5">
           <h2 className="text-base font-medium text-ink-AAA mb-3">專案內容</h2>
           <p className="text-sm leading-6 text-ink-AAA whitespace-pre-line">
             {donation.content || donation.description}
@@ -96,7 +96,8 @@ function Cover({
       primary={coverImageUrl}
       fallback={fallback}
       alt={alt}
-      className="w-full aspect-[4/3] object-cover"
+      // mask-image 讓圖底端逐漸透明、淡入下方的 InfoPanel / page surface
+      className="w-full aspect-[4/3] object-cover [mask-image:linear-gradient(to_bottom,black_70%,transparent)] [-webkit-mask-image:linear-gradient(to_bottom,black_70%,transparent)]"
     />
   )
 }
