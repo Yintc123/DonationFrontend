@@ -13,6 +13,8 @@ type AdminTableProps<T> = {
   rowKey: (row: T) => string
   emptyState?: ReactNode
   caption: string
+  /** Optional row-level className (lifecycle state highlight, etc.) */
+  rowClassName?: (row: T) => string | undefined
 }
 
 export function AdminTable<T>({
@@ -21,6 +23,7 @@ export function AdminTable<T>({
   rowKey,
   emptyState,
   caption,
+  rowClassName,
 }: AdminTableProps<T>) {
   if (rows.length === 0) {
     return (
@@ -58,7 +61,12 @@ export function AdminTable<T>({
         {rows.map((row) => (
           <tr
             key={rowKey(row)}
-            className="border-b border-line-soft hover:bg-black/5"
+            className={[
+              'border-b border-line-soft hover:bg-black/5',
+              rowClassName?.(row),
+            ]
+              .filter(Boolean)
+              .join(' ')}
           >
             {columns.map((c) => (
               <td

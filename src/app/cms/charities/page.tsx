@@ -43,44 +43,79 @@ async function fetchAdminCharityList(): Promise<BackendAdminCharityListItem[]> {
   return parsed.data.items
 }
 
-const COLUMNS: AdminTableColumn<BackendAdminCharityListItem>[] = [
-  { header: '名稱', cell: (r) => r.name, width: 'flex-1' },
-  {
-    header: '類別',
-    cell: (r) =>
-      r.categories.length > 0
-        ? r.categories.map((c) => c.displayName).join(' / ')
-        : '—',
-    width: 'w-40',
-  },
-  {
-    header: '排序',
-    cell: (r) => r.displayOrder,
-    width: 'w-16',
-    align: 'right',
-  },
-  {
-    header: '操作',
-    cell: (r) => (
-      <Link
-        href={`/cms/charities/${r.id}/edit`}
-        className="text-ink-link text-xs underline-offset-2 hover:underline"
-      >
-        編輯
-      </Link>
-    ),
-    width: 'w-16',
-    align: 'right',
-  },
-]
+function fmtLocal(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// 已下架 = publishEndAt 不為 null 且早於 `now`。`now` 由 caller 傳入
+// 避免每 cell 各自 `new Date()` 漂移。
+function isExpired(end: string | null, now: Date): boolean {
+  if (!end) return false
+  const t = new Date(end)
+  return !Number.isNaN(t.getTime()) && t <= now
+}
+
+function buildColumns(
+  now: Date,
+): AdminTableColumn<BackendAdminCharityListItem>[] {
+  return [
+    { header: '名稱', cell: (r) => r.name, width: 'flex-1' },
+    {
+      header: '類別',
+      cell: (r) =>
+        r.categories.length > 0
+          ? r.categories.map((c) => c.displayName).join(' / ')
+          : '—',
+      width: 'w-40',
+    },
+    {
+      header: '排序',
+      cell: (r) => r.displayOrder,
+      width: 'w-16',
+      align: 'right',
+    },
+    {
+      header: '上架時間',
+      cell: (r) => fmtLocal(r.publishStartAt),
+      width: 'w-40',
+    },
+    {
+      header: '下架時間',
+      cell: (r) =>
+        isExpired(r.publishEndAt, now) ? (
+          <>
+            {fmtLocal(r.publishEndAt)}{' '}
+            <span className="text-[10px]">（已下架）</span>
+          </>
+        ) : (
+          fmtLocal(r.publishEndAt)
+        ),
+      width: 'w-52',
+    },
+    {
+      header: '操作',
+      cell: (r) => (
+        <Link
+          href={`/cms/charities/${r.id}/edit`}
+          className="text-ink-link text-xs underline-offset-2 hover:underline"
+        >
+          編輯
+        </Link>
+      ),
+      width: 'w-16',
+      align: 'right',
+    },
+  ]
+}
 
 export default async function CharityListPage() {
   await requireAdminSession()
-  // ensureAdminAccess catches 401 (token expired / revoked) + 403 (admin
-  // demoted mid-session) thrown by BE — both signal "this user no longer
-  // has admin access", so log out + redirect home rather than dump a
-  // generic error UI.
   const items = await ensureAdminAccess(fetchAdminCharityList)
+  const now = new Date()
   return (
     <AdminPageShell
       title="公益團體"
@@ -98,9 +133,12 @@ export default async function CharityListPage() {
       }
     >
       <AdminTable
-        columns={COLUMNS}
+        columns={buildColumns(now)}
         rows={items}
         rowKey={(r) => r.id}
+        rowClassName={(r) =>
+          isExpired(r.publishEndAt, now) ? 'text-brand' : undefined
+        }
         caption="公益團體清單"
       />
     </AdminPageShell>

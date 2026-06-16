@@ -76,6 +76,25 @@ describe('AdminTable', () => {
     )
   })
 
+  it('5a: rowClassName(row) → 套 class 到對應 tr', () => {
+    const rows: Row[] = [
+      { id: '1', name: 'A', n: 0 },
+      { id: '2', name: 'B', n: 99 },
+    ]
+    const { container } = render(
+      <AdminTable
+        columns={COLUMNS}
+        rows={rows}
+        rowKey={(r) => r.id}
+        rowClassName={(r) => (r.n > 50 ? 'text-brand' : undefined)}
+        caption="x"
+      />,
+    )
+    const trs = container.querySelectorAll('tbody tr')
+    expect(trs[0].className).not.toMatch(/text-brand/)
+    expect(trs[1].className).toMatch(/text-brand/)
+  })
+
   it('5: caption sr-only', () => {
     render(
       <AdminTable
