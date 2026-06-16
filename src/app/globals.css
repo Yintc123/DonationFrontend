@@ -73,6 +73,10 @@ html, body {
   background-color: var(--color-surface-page);
 }
 
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 html {
   /* iOS safe-area is already handled per-component (e.g. CategoryMenu sheet) */
   min-height: 100dvh;
