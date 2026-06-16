@@ -1,9 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 
 import { TopNav } from '@/components/ui/TopNav'
-import { getSessionService } from '@/lib/session/service'
+import { requireAdminSession } from '@/lib/session/requireAdmin'
 
 export const metadata: Metadata = {
   title: 'CMS | JKODonation',
@@ -30,11 +29,10 @@ export const metadata: Metadata = {
  * 兩層配合對應 Next.js 16 auth 指南「Optimistic checks + DAL」。
  */
 export default async function CmsPage() {
-  const session = await getSessionService().get()
-  // `?reason=cms-auth` mirrors the proxy redirect so the homepage's
-  // AuthRedirectToast can fire whether the gate caught us at edge (proxy)
-  // or here in the RSC. See spec 010 §3.3.
-  if (!session) redirect('/?reason=cms-auth')
+  // Spec 011 §3.5 — admin role gate. Null session OR non-admin →
+  // redirect('/?reason=cms-not-admin'); the proxy + spec 010 RSC gate
+  // (cookie-presence) still fires first on no-cookie callers.
+  const session = await requireAdminSession()
 
   return (
     <div data-component="CmsPage" className="min-h-dvh bg-surface-page flex flex-col">

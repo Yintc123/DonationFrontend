@@ -25,6 +25,8 @@ import {
   AuthRedirectToast,
   CMS_AUTH_TOAST_ID,
   CMS_AUTH_TOAST_MESSAGE,
+  CMS_NOT_ADMIN_TOAST_ID,
+  CMS_NOT_ADMIN_TOAST_MESSAGE,
 } from './AuthRedirectToast'
 
 beforeEach(() => {
@@ -67,5 +69,17 @@ describe('<AuthRedirectToast />', () => {
     searchParamsMock.get.mockReturnValue(null)
     const { container } = render(<AuthRedirectToast />)
     expect(container.firstChild).toBeNull()
+  })
+
+  it('(spec 011 §3.5) fires toast.error 「需要管理員權限」 when reason=cms-not-admin', () => {
+    searchParamsMock.get.mockImplementation((k) =>
+      k === 'reason' ? 'cms-not-admin' : null,
+    )
+    render(<AuthRedirectToast />)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      CMS_NOT_ADMIN_TOAST_MESSAGE,
+      expect.objectContaining({ id: CMS_NOT_ADMIN_TOAST_ID }),
+    )
+    expect(replaceMock).toHaveBeenCalledWith('/')
   })
 })

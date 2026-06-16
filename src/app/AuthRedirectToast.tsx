@@ -1,24 +1,41 @@
 'use client'
 
-// Spec 010 §3.3 — surfaces a toast when an auth gate (proxy or RSC)
-// redirects the user back to `/` with `?reason=cms-auth`. Mounted on
-// the homepage (`src/app/page.tsx`), renders nothing to the DOM.
+// Spec 010 §3.3 + spec 011 §3.5 — surfaces a toast when an auth gate
+// (proxy or RSC) redirects the user back to `/` with `?reason=…`.
+// Mounted on the homepage (`src/app/page.tsx`), renders nothing.
 //
-// After firing once, strips the query via `router.replace('/')` so
-// page refresh doesn't re-toast. Sonner's `id` upsert means the
-// redundant React-19 strict-mode double-render in dev still shows
-// exactly one toast.
+// After firing once, strips the query via `router.replace('/')` so a
+// refresh doesn't re-toast. Sonner's `id` upsert means the redundant
+// React-19 strict-mode double-render in dev still shows one toast.
 
 import { useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 
 const REASON_PARAM = 'reason'
+
 const CMS_AUTH_REASON = 'cms-auth'
+const CMS_NOT_ADMIN_REASON = 'cms-not-admin'
 
 export const CMS_AUTH_TOAST_ID = 'cms-auth-required'
 export const CMS_AUTH_TOAST_MESSAGE = '無使用 cms 權限'
 export const CMS_AUTH_TOAST_DURATION_MS = 4000
+
+export const CMS_NOT_ADMIN_TOAST_ID = 'cms-not-admin'
+export const CMS_NOT_ADMIN_TOAST_MESSAGE = '需要管理員權限'
+
+type ToastSpec = { id: string; message: string }
+
+const REASONS: Record<string, ToastSpec> = {
+  [CMS_AUTH_REASON]: {
+    id: CMS_AUTH_TOAST_ID,
+    message: CMS_AUTH_TOAST_MESSAGE,
+  },
+  [CMS_NOT_ADMIN_REASON]: {
+    id: CMS_NOT_ADMIN_TOAST_ID,
+    message: CMS_NOT_ADMIN_TOAST_MESSAGE,
+  },
+}
 
 export function AuthRedirectToast() {
   const router = useRouter()
@@ -26,9 +43,11 @@ export function AuthRedirectToast() {
   const reason = searchParams.get(REASON_PARAM)
 
   useEffect(() => {
-    if (reason !== CMS_AUTH_REASON) return
-    toast.error(CMS_AUTH_TOAST_MESSAGE, {
-      id: CMS_AUTH_TOAST_ID,
+    if (!reason) return
+    const spec = REASONS[reason]
+    if (!spec) return
+    toast.error(spec.message, {
+      id: spec.id,
       duration: CMS_AUTH_TOAST_DURATION_MS,
     })
     router.replace('/')
